@@ -153,8 +153,8 @@ export default function Header() {
 
       {/* Change PIN Modal */}
       {showChangePin && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#161622] border border-white/10 rounded-2xl p-5 w-full max-w-sm shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 pt-24 sm:pt-4 overflow-y-auto">
+          <div className="bg-[#161622] border border-white/10 rounded-2xl p-5 w-full max-w-sm shadow-2xl my-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-white">Change PIN</h3>
               <button onClick={() => setShowChangePin(false)} className="text-white/50 hover:text-white">
