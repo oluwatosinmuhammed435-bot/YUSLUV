@@ -38,10 +38,10 @@ function AuthGate() {
           <ExpenseProvider>
             <Routes>
               <Route element={<AppShell />}>
-                <Route path="/" element={<POSScreen />} />
+                <Route path="/" element={<DashboardScreen />} />
+                <Route path="/pos" element={<POSScreen />} />
                 <Route path="/inventory" element={<InventoryScreen />} />
                 <Route path="/debtors" element={<DebtorsScreen />} />
-                <Route path="/dashboard" element={<DashboardScreen />} />
               </Route>
             </Routes>
           </ExpenseProvider>

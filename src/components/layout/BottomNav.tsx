@@ -7,10 +7,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useSales } from '../../context/SalesContext';
 
 const tabs = [
-  { path: '/', label: 'POS', icon: ShoppingCart },
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/pos', label: 'POS', icon: ShoppingCart },
   { path: '/inventory', label: 'Inventory', icon: Package },
   { path: '/debtors', label: 'Debtors', icon: Users },
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 ] as const;
 
 export default function BottomNav() {
@@ -43,7 +43,7 @@ export default function BottomNav() {
               <div className="relative">
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
                 {/* Cart badge */}
-                {path === '/' && cartItemCount > 0 && (
+                {path === '/pos' && cartItemCount > 0 && (
                   <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px]
                     bg-purple-500 text-white text-[9px] font-bold rounded-full
                     flex items-center justify-center px-1 shadow-lg shadow-purple-500/40">
