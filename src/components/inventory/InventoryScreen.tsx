@@ -2,8 +2,8 @@
 // Yusluv — Inventory Screen
 // ============================================
 
-import { useState, useMemo, useRef } from 'react';
-import { Plus, Search, Package, Edit3, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { Plus, Search, Package, Edit3, RefreshCw, Trash2, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useInventory } from '../../context/InventoryContext';
 import { CATEGORIES, type Category } from '../../types';
 import { formatNaira } from '../../lib/utils';
@@ -20,7 +20,13 @@ export default function InventoryScreen() {
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(30);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Reset limit when search or category changes
+  useEffect(() => {
+    setVisibleLimit(30);
+  }, [search, filterCategory]);
 
   const lowStockProducts = getLowStockProducts();
 
@@ -165,8 +171,8 @@ export default function InventoryScreen() {
           )}
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map((product) => (
+        <div className="space-y-2 pb-24">
+          {filtered.slice(0, visibleLimit).map((product) => (
             <div
               key={product.id}
               className="bg-white/[0.03] border border-white/5 rounded-2xl p-3.5
@@ -253,6 +259,18 @@ export default function InventoryScreen() {
               )}
             </div>
           ))}
+
+          {filtered.length > visibleLimit && (
+            <button
+              onClick={() => setVisibleLimit(v => v + 30)}
+              className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl
+                bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80
+                transition-colors text-sm font-medium"
+            >
+              <ChevronDown size={16} />
+              Load More Products
+            </button>
+          )}
         </div>
       )}
 

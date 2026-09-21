@@ -15,6 +15,7 @@ export default function Header() {
   const [showChangePin, setShowChangePin] = useState(false);
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
+  const [confirmNewPin, setConfirmNewPin] = useState('');
   const [pinError, setPinError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -47,8 +48,12 @@ export default function Header() {
   const handleChangePin = async (e: React.FormEvent) => {
     e.preventDefault();
     setPinError('');
-    if (oldPin.length !== 4 || newPin.length !== 4) {
+    if (oldPin.length !== 4 || newPin.length !== 4 || confirmNewPin.length !== 4) {
       setPinError('PINs must be exactly 4 digits');
+      return;
+    }
+    if (newPin !== confirmNewPin) {
+      setPinError('New PINs do not match');
       return;
     }
     const success = await changePin(oldPin, newPin);
@@ -56,6 +61,7 @@ export default function Header() {
       setShowChangePin(false);
       setOldPin('');
       setNewPin('');
+      setConfirmNewPin('');
       alert('PIN changed successfully!');
     } else {
       setPinError('Incorrect old PIN');
@@ -63,7 +69,8 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#0a0a0f]/90 backdrop-blur-xl border-b border-white/5">
+    <>
+      <header className="sticky top-0 z-40 bg-[#0a0a0f]/90 backdrop-blur-xl border-b border-white/5">
       <div className="flex items-center justify-between px-4 h-14">
         <h1 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-purple-200
           bg-clip-text text-transparent tracking-tight">
@@ -151,6 +158,8 @@ export default function Header() {
         />
       )}
 
+      </header>
+
       {/* Change PIN Modal */}
       {showChangePin && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 pt-24 sm:pt-4 overflow-y-auto">
@@ -191,6 +200,20 @@ export default function Header() {
                   required
                 />
               </div>
+              <div>
+                <label className="block text-sm text-white/50 mb-1">Confirm New PIN</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={confirmNewPin}
+                  onChange={(e) => setConfirmNewPin(e.target.value.replace(/\D/g, ''))}
+                  className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-white
+                    focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none"
+                  placeholder="Re-enter new 4-digit PIN"
+                  required
+                />
+              </div>
               <button
                 type="submit"
                 className="w-full h-12 bg-purple-600 hover:bg-purple-500 text-white font-semibold
@@ -202,6 +225,6 @@ export default function Header() {
           </div>
         </div>
       )}
-    </header>
+    </>
   );
 }

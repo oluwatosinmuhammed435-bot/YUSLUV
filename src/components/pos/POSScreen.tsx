@@ -2,8 +2,8 @@
 // Yusluv — POS Screen
 // ============================================
 
-import { useState, useMemo } from 'react';
-import { Search, ShoppingCart } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Search, ShoppingCart, ChevronDown } from 'lucide-react';
 import { useInventory } from '../../context/InventoryContext';
 import { useSales } from '../../context/SalesContext';
 import { CATEGORIES, type Category } from '../../types';
@@ -17,6 +17,12 @@ export default function POSScreen() {
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<Category | 'All'>('All');
   const [cartOpen, setCartOpen] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(30);
+
+  // Reset limit when search or category changes
+  useEffect(() => {
+    setVisibleLimit(30);
+  }, [search, filterCategory]);
 
   const filtered = useMemo(() => {
     return products
@@ -87,14 +93,27 @@ export default function POSScreen() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-          {filtered.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onAddToCart={addToCart}
-            />
-          ))}
+        <div className="pb-24">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {filtered.slice(0, visibleLimit).map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAddToCart={addToCart}
+              />
+            ))}
+          </div>
+          {filtered.length > visibleLimit && (
+            <button
+              onClick={() => setVisibleLimit(v => v + 30)}
+              className="mt-6 mx-auto flex items-center gap-2 px-4 py-2 rounded-xl
+                bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80
+                transition-colors text-sm font-medium"
+            >
+              <ChevronDown size={16} />
+              Load More Products
+            </button>
+          )}
         </div>
       )}
 
