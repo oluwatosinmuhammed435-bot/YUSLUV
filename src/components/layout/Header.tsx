@@ -33,7 +33,7 @@ export default function Header() {
     if (!file) return;
     setImporting(true);
     try {
-      const data = await readJSONFile(file);
+      await readJSONFile(file);
       // Note: import from JSON backup — data goes into Firestore via context
       alert('Import from backup is currently not supported in cloud sync mode.\nPlease add data directly through the app.');
     } catch {
