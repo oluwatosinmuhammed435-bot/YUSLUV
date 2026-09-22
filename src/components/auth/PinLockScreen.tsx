@@ -1,14 +1,24 @@
 // ============================================
-// Yusluv — PIN Lock Screen
+// Yusluv — PIN Lock Screen (Secondary / Local Lock)
 // ============================================
 
 import { useState, useCallback } from 'react';
-import { Shield, Lock } from 'lucide-react';
+import { Shield, Lock, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import PinPad from './PinPad';
 
 export default function PinLockScreen() {
-  const { isPinSet, setupPin, authenticate, error, clearError, resetPin } = useAuth();
+  const {
+    user,
+    isPinSet,
+    setupPin,
+    unlockWithPin,
+    pinError,
+    clearPinError,
+    resetPin,
+    logOut,
+  } = useAuth();
+
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [step, setStep] = useState<'enter' | 'confirm'>('enter');
@@ -23,7 +33,7 @@ export default function PinLockScreen() {
 
   const handleDigit = useCallback(
     (digit: string) => {
-      clearError();
+      clearPinError();
       setLocalError('');
       if (step === 'confirm') {
         if (confirmPin.length < 4) setConfirmPin((p) => p + digit);
@@ -31,7 +41,7 @@ export default function PinLockScreen() {
         if (pin.length < 4) setPin((p) => p + digit);
       }
     },
-    [pin, confirmPin, step, clearError]
+    [pin, confirmPin, step, clearPinError]
   );
 
   const handleDelete = useCallback(() => {
@@ -73,16 +83,16 @@ export default function PinLockScreen() {
         triggerShake();
         return;
       }
-      const ok = await authenticate(pin);
+      const ok = await unlockWithPin(pin);
       if (!ok) {
         setPin('');
         triggerShake();
       }
     }
-  }, [isPinSet, step, pin, confirmPin, setupPin, authenticate, triggerShake]);
+  }, [isPinSet, step, pin, confirmPin, setupPin, unlockWithPin, triggerShake]);
 
   const currentPin = step === 'confirm' ? confirmPin : pin;
-  const displayError = localError || error;
+  const displayError = localError || pinError;
 
   const title = !isPinSet
     ? step === 'enter'
@@ -98,6 +108,13 @@ export default function PinLockScreen() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center px-6">
+
+      {/* Background glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[600px] h-[600px]
+          bg-purple-900/20 rounded-full blur-[120px]" />
+      </div>
+
       {/* Brand */}
       <div className="mb-8 text-center">
         <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-600 to-purple-800
@@ -110,6 +127,13 @@ export default function PinLockScreen() {
         </h1>
         <p className="text-white/40 text-xs mt-1 tracking-widest uppercase">Retail Manager</p>
       </div>
+
+      {/* Logged in as */}
+      {user?.email && (
+        <p className="text-white/30 text-xs mb-6 bg-white/5 px-4 py-1.5 rounded-full border border-white/10">
+          {user.email}
+        </p>
+      )}
 
       {/* Title */}
       <div className="text-center mb-8">
@@ -173,8 +197,7 @@ export default function PinLockScreen() {
           max-w-[280px] w-full animate-fade-in">
           <p className="text-amber-400 text-sm font-medium mb-1">⚠️ Reset your PIN?</p>
           <p className="text-white/40 text-xs mb-4">
-            This will clear your current PIN so you can set a new one.
-            Your business data (products, sales, debtors) will NOT be deleted.
+            This will clear your PIN. Your cloud data will remain safe.
           </p>
           <div className="flex gap-2">
             <button
@@ -199,6 +222,16 @@ export default function PinLockScreen() {
           </div>
         </div>
       )}
+
+      {/* Sign out link at bottom */}
+      <button
+        onClick={logOut}
+        className="mt-10 flex items-center gap-1.5 text-white/20 text-xs
+          hover:text-white/50 transition-colors"
+      >
+        <LogOut size={12} />
+        Sign out of this account
+      </button>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // ============================================
-// Yusluv — Debtor Context
+// Yusluv — Debtor Context (Firestore)
 // ============================================
 
 import {
@@ -10,8 +10,16 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import {
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+  deleteDoc,
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useAuth } from './AuthContext';
 import type { Debtor, DebtTransaction, SaleItem } from '../types';
-import { getAllDebtors, putDebtor, deleteDebtor as dbDeleteDebtor } from '../lib/db';
 import { generateId, formatNaira, formatDate } from '../lib/utils';
 
 interface DebtorState {
@@ -20,10 +28,7 @@ interface DebtorState {
 }
 
 type DebtorAction =
-  | { type: 'LOAD'; debtors: Debtor[] }
-  | { type: 'ADD'; debtor: Debtor }
-  | { type: 'UPDATE'; debtor: Debtor }
-  | { type: 'DELETE'; id: string };
+  | { type: 'LOAD'; debtors: Debtor[] };
 
 interface DebtorContextValue extends DebtorState {
   addDebtor: (name: string, phone: string) => Promise<Debtor>;
@@ -41,31 +46,36 @@ function debtorReducer(state: DebtorState, action: DebtorAction): DebtorState {
   switch (action.type) {
     case 'LOAD':
       return { ...state, debtors: action.debtors, isLoading: false };
-    case 'ADD':
-      return { ...state, debtors: [...state.debtors, action.debtor] };
-    case 'UPDATE':
-      return {
-        ...state,
-        debtors: state.debtors.map((d) =>
-          d.id === action.debtor.id ? action.debtor : d
-        ),
-      };
-    case 'DELETE':
-      return { ...state, debtors: state.debtors.filter((d) => d.id !== action.id) };
     default:
       return state;
   }
 }
 
 export function DebtorProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [state, dispatch] = useReducer(debtorReducer, {
     debtors: [],
     isLoading: true,
   });
 
+  // Real-time Firestore listener
   useEffect(() => {
-    getAllDebtors().then((debtors) => dispatch({ type: 'LOAD', debtors }));
-  }, []);
+    if (!user) return;
+    const col = collection(db, 'users', user.uid, 'debtors');
+    const unsub = onSnapshot(col, (snap) => {
+      const debtors = snap.docs.map((d) => d.data() as Debtor);
+      debtors.sort((a, b) => a.createdAt - b.createdAt);
+      dispatch({ type: 'LOAD', debtors });
+    }, (err) => {
+      console.error('Debtors snapshot error:', err);
+    });
+    return unsub;
+  }, [user]);
+
+  const colRef = useCallback(() => {
+    if (!user) throw new Error('Not authenticated');
+    return collection(db, 'users', user.uid, 'debtors');
+  }, [user]);
 
   const addDebtor = useCallback(async (name: string, phone: string): Promise<Debtor> => {
     const now = Date.now();
@@ -78,26 +88,23 @@ export function DebtorProvider({ children }: { children: ReactNode }) {
       createdAt: now,
       updatedAt: now,
     };
-    await putDebtor(debtor);
-    dispatch({ type: 'ADD', debtor });
+    await setDoc(doc(colRef(), debtor.id), debtor);
     return debtor;
-  }, []);
+  }, [colRef]);
 
   const updateDebtor = useCallback(
     async (id: string, data: Partial<Pick<Debtor, 'name' | 'phone'>>) => {
       const existing = state.debtors.find((d) => d.id === id);
       if (!existing) return;
       const updated = { ...existing, ...data, updatedAt: Date.now() };
-      await putDebtor(updated);
-      dispatch({ type: 'UPDATE', debtor: updated });
+      await setDoc(doc(colRef(), id), updated);
     },
-    [state.debtors]
+    [state.debtors, colRef]
   );
 
   const removeDebtor = useCallback(async (id: string) => {
-    await dbDeleteDebtor(id);
-    dispatch({ type: 'DELETE', id });
-  }, []);
+    await deleteDoc(doc(colRef(), id));
+  }, [colRef]);
 
   const addCredit = useCallback(
     async (debtorId: string, amount: number, items?: SaleItem[], note?: string) => {
@@ -108,9 +115,9 @@ export function DebtorProvider({ children }: { children: ReactNode }) {
         id: generateId(),
         type: 'credit',
         amount,
-        items,
         note: note || 'Credit purchase',
         timestamp: Date.now(),
+        ...(items ? { items } : {}),
       };
 
       const updated: Debtor = {
@@ -120,10 +127,9 @@ export function DebtorProvider({ children }: { children: ReactNode }) {
         updatedAt: Date.now(),
       };
 
-      await putDebtor(updated);
-      dispatch({ type: 'UPDATE', debtor: updated });
+      await setDoc(doc(colRef(), debtorId), updated);
     },
-    [state.debtors]
+    [state.debtors, colRef]
   );
 
   const recordPayment = useCallback(
@@ -146,10 +152,9 @@ export function DebtorProvider({ children }: { children: ReactNode }) {
         updatedAt: Date.now(),
       };
 
-      await putDebtor(updated);
-      dispatch({ type: 'UPDATE', debtor: updated });
+      await setDoc(doc(colRef(), debtorId), updated);
     },
-    [state.debtors]
+    [state.debtors, colRef]
   );
 
   const generateWhatsAppSummary = useCallback(

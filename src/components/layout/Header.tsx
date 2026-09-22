@@ -6,10 +6,9 @@ import { useState, useRef } from 'react';
 import { Settings, Download, Upload, LogOut, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { downloadJSON, downloadInventoryCSV, readJSONFile } from '../../lib/export';
-import { importAllData } from '../../lib/db';
 
 export default function Header() {
-  const { logout, changePin } = useAuth();
+  const { logOut, changePin, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [showChangePin, setShowChangePin] = useState(false);
@@ -35,8 +34,8 @@ export default function Header() {
     setImporting(true);
     try {
       const data = await readJSONFile(file);
-      await importAllData(data as Parameters<typeof importAllData>[0]);
-      window.location.reload();
+      // Note: import from JSON backup — data goes into Firestore via context
+      alert('Import from backup is currently not supported in cloud sync mode.\nPlease add data directly through the app.');
     } catch {
       alert('Failed to import data. Make sure the file is a valid Yusluv backup.');
     } finally {
@@ -136,16 +135,21 @@ export default function Header() {
             Change PIN
           </button>
           <div className="border-t border-white/5" />
+          {user?.email && (
+            <div className="px-4 py-2 text-xs text-white/30 truncate border-t border-white/5">
+              {user.email}
+            </div>
+          )}
           <button
             onClick={() => {
-              logout();
+              logOut();
               setMenuOpen(false);
             }}
             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400
               hover:bg-red-500/10 transition-colors"
           >
             <LogOut size={16} />
-            Lock App
+            Sign Out
           </button>
         </div>
       )}

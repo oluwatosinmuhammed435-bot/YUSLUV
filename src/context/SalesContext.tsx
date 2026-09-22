@@ -1,5 +1,5 @@
 // ============================================
-// Yusluv — Sales Context
+// Yusluv — Sales Context (Firestore)
 // ============================================
 
 import {
@@ -10,8 +10,15 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import {
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useAuth } from './AuthContext';
 import type { CartItem, Sale, SaleItem, Product, SellMode } from '../types';
-import { getAllSales, putSale } from '../lib/db';
 import { generateId } from '../lib/utils';
 
 interface SalesState {
@@ -68,27 +75,37 @@ function salesReducer(state: SalesState, action: SalesAction): SalesState {
 }
 
 export function SalesProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [state, dispatch] = useReducer(salesReducer, {
     cart: [],
     sales: [],
     isLoading: true,
   });
 
+  // Real-time Firestore listener
   useEffect(() => {
-    getAllSales().then((sales) => {
-      // Sort most recent first
+    if (!user) return;
+    const col = collection(db, 'users', user.uid, 'sales');
+    const unsub = onSnapshot(col, (snap) => {
+      const sales = snap.docs.map((d) => d.data() as Sale);
       sales.sort((a, b) => b.timestamp - a.timestamp);
       dispatch({ type: 'LOAD_SALES', sales });
+    }, (err) => {
+      console.error('Sales snapshot error:', err);
     });
-  }, []);
+    return unsub;
+  }, [user]);
+
+  const colRef = useCallback(() => {
+    if (!user) throw new Error('Not authenticated');
+    return collection(db, 'users', user.uid, 'sales');
+  }, [user]);
 
   const addToCart = useCallback(
     (product: Product, sellMode: SellMode, quantity: number) => {
-      // Check if same product + same sell mode already in cart
       const existingIndex = state.cart.findIndex(
         (item) => item.product.id === product.id && item.sellMode === sellMode
       );
-
       if (existingIndex >= 0) {
         const existing = state.cart[existingIndex];
         const newQty = existing.quantity + quantity;
@@ -141,24 +158,24 @@ export function SalesProvider({ children }: { children: ReactNode }) {
         productName: item.product.name,
         quantity: item.quantity,
         sellMode: item.sellMode,
-        unitPrice:
-          item.sellMode === 'bulk' ? item.product.bulkPrice : item.product.piecePrice,
+        unitPrice: item.sellMode === 'bulk' ? item.product.bulkPrice : item.product.piecePrice,
         subtotal: item.subtotal,
       }));
 
+      // Firestore rejects `undefined` — only include debtorId if it has a value
       const sale: Sale = {
         id: generateId(),
         items: saleItems,
         totalAmount: state.cart.reduce((sum, item) => sum + item.subtotal, 0),
-        debtorId,
         timestamp: Date.now(),
+        ...(debtorId ? { debtorId } : {}),
       };
 
-      await putSale(sale);
+      await setDoc(doc(colRef(), sale.id), sale);
       dispatch({ type: 'RECORD_SALE', sale });
       return sale;
     },
-    [state.cart]
+    [state.cart, colRef]
   );
 
   const cartTotal = state.cart.reduce((sum, item) => sum + item.subtotal, 0);

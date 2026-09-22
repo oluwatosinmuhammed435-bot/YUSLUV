@@ -1,5 +1,5 @@
 // ============================================
-// Yusluv — Expense Context
+// Yusluv — Expense Context (Firestore)
 // ============================================
 
 import {
@@ -10,8 +10,16 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import {
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+  deleteDoc,
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useAuth } from './AuthContext';
 import type { Expense, ExpenseCategory } from '../types';
-import { getAllExpenses, putExpense, deleteExpense as dbDeleteExpense } from '../lib/db';
 import { generateId } from '../lib/utils';
 
 interface ExpenseState {
@@ -20,9 +28,7 @@ interface ExpenseState {
 }
 
 type ExpenseAction =
-  | { type: 'LOAD'; expenses: Expense[] }
-  | { type: 'ADD'; expense: Expense }
-  | { type: 'DELETE'; id: string };
+  | { type: 'LOAD'; expenses: Expense[] };
 
 interface ExpenseContextValue extends ExpenseState {
   addExpense: (description: string, category: ExpenseCategory, amount: number, note?: string) => Promise<Expense>;
@@ -38,10 +44,6 @@ function expenseReducer(state: ExpenseState, action: ExpenseAction): ExpenseStat
   switch (action.type) {
     case 'LOAD':
       return { ...state, expenses: action.expenses, isLoading: false };
-    case 'ADD':
-      return { ...state, expenses: [action.expense, ...state.expenses] };
-    case 'DELETE':
-      return { ...state, expenses: state.expenses.filter((e) => e.id !== action.id) };
     default:
       return state;
   }
@@ -57,17 +59,30 @@ function isSameDay(ts: number, date: Date): boolean {
 }
 
 export function ExpenseProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [state, dispatch] = useReducer(expenseReducer, {
     expenses: [],
     isLoading: true,
   });
 
+  // Real-time Firestore listener
   useEffect(() => {
-    getAllExpenses().then((expenses) => {
+    if (!user) return;
+    const col = collection(db, 'users', user.uid, 'expenses');
+    const unsub = onSnapshot(col, (snap) => {
+      const expenses = snap.docs.map((d) => d.data() as Expense);
       expenses.sort((a, b) => b.timestamp - a.timestamp);
       dispatch({ type: 'LOAD', expenses });
+    }, (err) => {
+      console.error('Expenses snapshot error:', err);
     });
-  }, []);
+    return unsub;
+  }, [user]);
+
+  const colRef = useCallback(() => {
+    if (!user) throw new Error('Not authenticated');
+    return collection(db, 'users', user.uid, 'expenses');
+  }, [user]);
 
   const addExpense = useCallback(
     async (description: string, category: ExpenseCategory, amount: number, note?: string): Promise<Expense> => {
@@ -79,17 +94,15 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
         note: note || '',
         timestamp: Date.now(),
       };
-      await putExpense(expense);
-      dispatch({ type: 'ADD', expense });
+      await setDoc(doc(colRef(), expense.id), expense);
       return expense;
     },
-    []
+    [colRef]
   );
 
   const removeExpense = useCallback(async (id: string) => {
-    await dbDeleteExpense(id);
-    dispatch({ type: 'DELETE', id });
-  }, []);
+    await deleteDoc(doc(colRef(), id));
+  }, [colRef]);
 
   const getExpensesByDate = useCallback(
     (date: Date) => state.expenses.filter((e) => isSameDay(e.timestamp, date)),

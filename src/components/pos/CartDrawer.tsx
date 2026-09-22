@@ -24,19 +24,24 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
   const [sellOnCredit, setSellOnCredit] = useState(false);
   const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
 
+  const [error, setError] = useState('');
+
   const handleConfirmSale = async () => {
     if (cart.length === 0) return;
     setConfirming(true);
+    setError('');
 
     try {
-      // Deduct stock for each cart item
-      for (const item of cart) {
-        const piecesToDeduct =
-          item.sellMode === 'bulk'
-            ? item.quantity * item.product.piecesPerBulk
-            : item.quantity;
-        await deductStock(item.product.id, piecesToDeduct);
-      }
+      // Deduct stock for all cart items in parallel
+      await Promise.all(
+        cart.map((item) => {
+          const piecesToDeduct =
+            item.sellMode === 'bulk'
+              ? item.quantity * item.product.piecesPerBulk
+              : item.quantity;
+          return deductStock(item.product.id, piecesToDeduct);
+        })
+      );
 
       // Record the sale
       const sale = await confirmSale(selectedDebtor?.id);
@@ -53,6 +58,9 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
         setSelectedDebtor(null);
         onClose();
       }, 1500);
+    } catch (err) {
+      console.error('Confirm sale error:', err);
+      setError(err instanceof Error ? err.message : 'Sale failed. Please try again.');
     } finally {
       setConfirming(false);
     }
@@ -199,6 +207,14 @@ export default function CartDrawer({ open, onClose }: CartDrawerProps) {
               <span className="text-white/50 text-sm">Total</span>
               <span className="text-white text-xl font-bold">{formatNaira(cartTotal)}</span>
             </div>
+
+            {/* Error message */}
+            {error && (
+              <div className="mb-3 px-3 py-2.5 bg-red-500/10 border border-red-500/20 rounded-xl">
+                <p className="text-red-400 text-xs">{error}</p>
+              </div>
+            )}
+
             <button
               onClick={handleConfirmSale}
               disabled={confirming || (sellOnCredit && !selectedDebtor)}

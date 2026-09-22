@@ -1,5 +1,5 @@
 // ============================================
-// Yusluv — Inventory Context
+// Yusluv — Inventory Context (Firestore)
 // ============================================
 
 import {
@@ -10,8 +10,16 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import {
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+  deleteDoc,
+} from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useAuth } from './AuthContext';
 import type { Product, Category } from '../types';
-import { getAllProducts, putProduct, deleteProduct as dbDeleteProduct } from '../lib/db';
 import { generateId } from '../lib/utils';
 
 interface InventoryState {
@@ -21,9 +29,7 @@ interface InventoryState {
 
 type InventoryAction =
   | { type: 'LOAD'; products: Product[] }
-  | { type: 'ADD'; product: Product }
-  | { type: 'UPDATE'; product: Product }
-  | { type: 'DELETE'; id: string };
+  | { type: 'SET_LOADING'; loading: boolean };
 
 interface InventoryContextValue extends InventoryState {
   addProduct: (data: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Product>;
@@ -42,67 +48,61 @@ function inventoryReducer(state: InventoryState, action: InventoryAction): Inven
   switch (action.type) {
     case 'LOAD':
       return { ...state, products: action.products, isLoading: false };
-    case 'ADD':
-      return { ...state, products: [...state.products, action.product] };
-    case 'UPDATE':
-      return {
-        ...state,
-        products: state.products.map((p) =>
-          p.id === action.product.id ? action.product : p
-        ),
-      };
-    case 'DELETE':
-      return {
-        ...state,
-        products: state.products.filter((p) => p.id !== action.id),
-      };
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.loading };
     default:
       return state;
   }
 }
 
 export function InventoryProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [state, dispatch] = useReducer(inventoryReducer, {
     products: [],
     isLoading: true,
   });
 
+  // Real-time Firestore listener — fires on every change across all devices
   useEffect(() => {
-    getAllProducts().then((products) => dispatch({ type: 'LOAD', products }));
-  }, []);
+    if (!user) return;
+    const col = collection(db, 'users', user.uid, 'products');
+    const unsub = onSnapshot(col, (snap) => {
+      const products = snap.docs.map((d) => d.data() as Product);
+      // Sort newest first in memory (avoids needing a Firestore index)
+      products.sort((a, b) => b.createdAt - a.createdAt);
+      dispatch({ type: 'LOAD', products });
+    }, (err) => {
+      console.error('Inventory snapshot error:', err);
+    });
+    return unsub;
+  }, [user]);
+
+  const colRef = useCallback(() => {
+    if (!user) throw new Error('Not authenticated');
+    return collection(db, 'users', user.uid, 'products');
+  }, [user]);
 
   const addProduct = useCallback(
     async (data: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product> => {
       const now = Date.now();
-      const product: Product = {
-        ...data,
-        id: generateId(),
-        createdAt: now,
-        updatedAt: now,
-      };
-      await putProduct(product);
-      dispatch({ type: 'ADD', product });
+      const product: Product = { ...data, id: generateId(), createdAt: now, updatedAt: now };
+      await setDoc(doc(colRef(), product.id), product);
       return product;
     },
-    []
+    [colRef]
   );
 
   const bulkAddProducts = useCallback(
     async (items: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>[]): Promise<void> => {
       const now = Date.now();
-      const newProducts = items.map((data) => ({
-        ...data,
-        id: generateId(),
-        createdAt: now,
-        updatedAt: now,
-      }));
-      // Wait for all DB puts to complete
-      await Promise.all(newProducts.map((p) => putProduct(p)));
-      // Instead of dispatching ADD in a loop, we can just reload all products
-      const all = await getAllProducts();
-      dispatch({ type: 'LOAD', products: all });
+      await Promise.all(
+        items.map((data) => {
+          const p: Product = { ...data, id: generateId(), createdAt: now, updatedAt: now };
+          return setDoc(doc(colRef(), p.id), p);
+        })
+      );
     },
-    []
+    [colRef]
   );
 
   const updateProduct = useCallback(
@@ -110,10 +110,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       const existing = state.products.find((p) => p.id === id);
       if (!existing) return;
       const updated = { ...existing, ...data, updatedAt: Date.now() };
-      await putProduct(updated);
-      dispatch({ type: 'UPDATE', product: updated });
+      await setDoc(doc(colRef(), id), updated);
     },
-    [state.products]
+    [state.products, colRef]
   );
 
   const restockProduct = useCallback(
@@ -125,10 +124,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         stockInPieces: existing.stockInPieces + additionalPieces,
         updatedAt: Date.now(),
       };
-      await putProduct(updated);
-      dispatch({ type: 'UPDATE', product: updated });
+      await setDoc(doc(colRef(), id), updated);
     },
-    [state.products]
+    [state.products, colRef]
   );
 
   const deductStock = useCallback(
@@ -140,16 +138,17 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         stockInPieces: Math.max(0, existing.stockInPieces - pieces),
         updatedAt: Date.now(),
       };
-      await putProduct(updated);
-      dispatch({ type: 'UPDATE', product: updated });
+      await setDoc(doc(colRef(), id), updated);
     },
-    [state.products]
+    [state.products, colRef]
   );
 
-  const removeProduct = useCallback(async (id: string) => {
-    await dbDeleteProduct(id);
-    dispatch({ type: 'DELETE', id });
-  }, []);
+  const removeProduct = useCallback(
+    async (id: string) => {
+      await deleteDoc(doc(colRef(), id));
+    },
+    [colRef]
+  );
 
   const getProductsByCategory = useCallback(
     (category: Category) => state.products.filter((p) => p.category === category),
