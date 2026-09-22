@@ -104,7 +104,7 @@ export default function SalesChart({ sales, expenses }: SalesChartProps) {
             }}
             itemStyle={{ fontSize: '12px' }}
             labelStyle={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', marginBottom: '4px' }}
-            formatter={(value: number) => [`₦${(value || 0).toLocaleString()}`, '']}
+            formatter={(value: any) => [`₦${(Number(value) || 0).toLocaleString()}`, '']}
           />
           <Area
             type="monotone"
