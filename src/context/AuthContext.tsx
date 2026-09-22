@@ -41,6 +41,7 @@ type AuthAction =
   | { type: 'FIREBASE_ERROR'; error: string }
   | { type: 'CLEAR_FIREBASE_ERROR' }
   | { type: 'PIN_UNLOCKED' }
+  | { type: 'PIN_LOCKED' }
   | { type: 'PIN_ERROR'; error: string }
   | { type: 'CLEAR_PIN_ERROR' }
   | { type: 'PIN_SET'; isPinSet: boolean }
@@ -105,6 +106,9 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
       return { ...state, firebaseError: null };
     case 'PIN_UNLOCKED':
       return { ...state, isPinUnlocked: true, pinError: null };
+    case 'PIN_LOCKED':
+      // Only lock if a PIN is actually set; otherwise no-op
+      return state.isPinSet ? { ...state, isPinUnlocked: false, pinError: null } : state;
     case 'PIN_ERROR':
       return { ...state, pinError: action.error };
     case 'CLEAR_PIN_ERROR':
@@ -140,6 +144,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
     return unsub;
+  }, []);
+
+  // Lock PIN when app goes to background (tab hidden / phone lock screen)
+  // This makes every re-open require the PIN again — like OPay
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        dispatch({ type: 'PIN_LOCKED' });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   // ---- Firebase Auth actions ----

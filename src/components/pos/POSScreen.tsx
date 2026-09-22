@@ -2,7 +2,7 @@
 // Yusluv — POS Screen
 // ============================================
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Search, ShoppingCart, ChevronDown } from 'lucide-react';
 import { useInventory } from '../../context/InventoryContext';
 import { useSales } from '../../context/SalesContext';
@@ -20,9 +20,11 @@ export default function POSScreen() {
   const [visibleLimit, setVisibleLimit] = useState(30);
 
   // Reset limit when search or category changes
-  useEffect(() => {
-    setVisibleLimit(30);
-  }, [search, filterCategory]);
+  const [prevFilter, setPrevFilter] = useState({ search, filterCategory });
+  if (prevFilter.search !== search || prevFilter.filterCategory !== filterCategory) {
+    setPrevFilter({ search, filterCategory });
+    if (visibleLimit !== 30) setVisibleLimit(30);
+  }
 
   const filtered = useMemo(() => {
     return products

@@ -2,7 +2,7 @@
 // Yusluv — Inventory Screen
 // ============================================
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Plus, Search, Package, Edit3, RefreshCw, Trash2, AlertTriangle, ChevronDown } from 'lucide-react';
 import { useInventory } from '../../context/InventoryContext';
 import { CATEGORIES, type Category } from '../../types';
@@ -23,10 +23,12 @@ export default function InventoryScreen() {
   const [visibleLimit, setVisibleLimit] = useState(30);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Reset limit when search or category changes
-  useEffect(() => {
-    setVisibleLimit(30);
-  }, [search, filterCategory]);
+  // Reset limit when search or category changes (during render, not in effect)
+  const [prevFilter, setPrevFilter] = useState({ search, filterCategory });
+  if (prevFilter.search !== search || prevFilter.filterCategory !== filterCategory) {
+    setPrevFilter({ search, filterCategory });
+    if (visibleLimit !== 30) setVisibleLimit(30);
+  }
 
   const lowStockProducts = getLowStockProducts();
 
