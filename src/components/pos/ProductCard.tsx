@@ -1,9 +1,5 @@
-// ============================================
-// Yusluv — POS Product Card
-// ============================================
-
 import { useState } from 'react';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus, Check } from 'lucide-react';
 import type { Product, SellMode } from '../../types';
 import { formatNaira } from '../../lib/utils';
 
@@ -15,115 +11,159 @@ interface ProductCardProps {
 export default function ProductCard({ product, onAddToCart }: ProductCardProps) {
   const [sellMode, setSellMode] = useState<SellMode>('piece');
   const [qty, setQty] = useState(1);
-  const [added, setAdded] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
 
   const outOfStock = product.stockInPieces === 0;
-  const isLow = product.stockInPieces <= product.lowStockThreshold;
+  const isLowStock = product.stockInPieces <= product.lowStockThreshold;
 
-  const maxQty = sellMode === 'bulk'
-    ? Math.floor(product.stockInPieces / product.piecesPerBulk)
-    : product.stockInPieces;
+  const maxBulks = Math.floor(product.stockInPieces / product.piecesPerBulk);
+  const maxQty = sellMode === 'bulk' ? maxBulks : product.stockInPieces;
 
   const unitPrice = sellMode === 'bulk' ? product.bulkPrice : product.piecePrice;
+  const subtotal = unitPrice * qty;
 
   const handleAdd = () => {
     if (outOfStock || qty < 1) return;
     onAddToCart(product, sellMode, qty);
-    setAdded(true);
+    setJustAdded(true);
     setQty(1);
-    setTimeout(() => setAdded(false), 600);
+    setTimeout(() => setJustAdded(false), 800);
+  };
+
+  const handleModeChange = (mode: SellMode) => {
+    setSellMode(mode);
+    setQty(1);
   };
 
   return (
     <div
-      className={`relative bg-white/[0.03] border rounded-2xl p-3 transition-all duration-200
-        ${outOfStock
-          ? 'border-white/5 opacity-50'
-          : added
-            ? 'border-purple-500/50 shadow-lg shadow-purple-500/10'
-            : isLow
-              ? 'border-amber-500/20 hover:border-amber-500/30'
-              : 'border-white/5 hover:border-white/10'
-        }`}
+      className={`bg-card rounded-[12px] border transition-all duration-150 flex flex-col justify-between p-3.5 sm:p-4 select-none ${
+        outOfStock
+          ? 'opacity-60 border-border bg-page-bg/40'
+          : justAdded
+          ? 'border-primary ring-2 ring-primary/20 shadow-sm'
+          : 'border-border hover:border-primary/40 hover:shadow-xs'
+      }`}
     >
-      {/* Product name + category */}
-      <h3 className="text-white font-medium text-sm truncate mb-0.5">{product.name}</h3>
-      <p className="text-white/25 text-[10px] mb-2">{product.category}</p>
+      {/* Top: Product Name, Category & Stock Badge */}
+      <div>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <h3 className="text-sm font-semibold text-text line-clamp-2 leading-snug">
+            {product.name}
+          </h3>
+          <span
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+              outOfStock
+                ? 'bg-red-50 text-danger border border-danger/20'
+                : isLowStock
+                ? 'bg-amber-50 text-accent-amber border border-accent-amber/20'
+                : 'bg-primary-tint text-primary border border-primary/20'
+            }`}
+          >
+            {outOfStock ? 'Out' : isLowStock ? `${product.stockInPieces} left` : `${product.stockInPieces} pcs`}
+          </span>
+        </div>
+        <p className="text-[11px] text-muted mb-3">{product.category}</p>
 
-      {/* Sell mode toggle */}
-      <div className="flex bg-white/5 rounded-lg p-0.5 mb-2">
-        <button
-          onClick={() => { setSellMode('piece'); setQty(1); }}
-          className={`flex-1 py-1.5 rounded-md text-[11px] font-medium transition-all
-            ${sellMode === 'piece'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-white/40 hover:text-white/60'
+        {/* Sell Mode Toggle (Piece vs Bulk) */}
+        <div className="flex bg-page-bg p-1 rounded-xl border border-border mb-3">
+          <button
+            type="button"
+            onClick={() => handleModeChange('piece')}
+            disabled={outOfStock}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              sellMode === 'piece'
+                ? 'bg-primary text-white shadow-xs'
+                : 'text-muted hover:text-text'
             }`}
-        >
-          Piece
-        </button>
-        <button
-          onClick={() => { setSellMode('bulk'); setQty(1); }}
-          disabled={Math.floor(product.stockInPieces / product.piecesPerBulk) === 0}
-          className={`flex-1 py-1.5 rounded-md text-[11px] font-medium transition-all
-            disabled:opacity-30 disabled:cursor-not-allowed
-            ${sellMode === 'bulk'
-              ? 'bg-purple-600 text-white shadow-md'
-              : 'text-white/40 hover:text-white/60'
+          >
+            Piece
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange('bulk')}
+            disabled={maxBulks === 0}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+              sellMode === 'bulk'
+                ? 'bg-primary text-white shadow-xs'
+                : 'text-muted hover:text-text'
             }`}
-        >
-          Bulk
-        </button>
+          >
+            Bulk ({product.piecesPerBulk}p)
+          </button>
+        </div>
+
+        {/* Price display */}
+        <div className="flex items-baseline justify-between mb-3 px-1">
+          <div>
+            <span className="text-xs text-muted block">Rate</span>
+            <span className="text-base font-bold text-text">
+              {formatNaira(unitPrice)}
+            </span>
+          </div>
+          {qty > 1 && (
+            <div className="text-right">
+              <span className="text-[10px] text-muted block">Subtotal</span>
+              <span className="text-sm font-semibold text-primary">
+                {formatNaira(subtotal)}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Price */}
-      <p className="text-purple-400 font-bold text-base mb-2">{formatNaira(unitPrice)}</p>
-
-      {/* Qty + Add */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center bg-white/5 rounded-lg">
+      {/* Bottom: Quantity Stepper & Add Button */}
+      <div className="pt-2 border-t border-border flex items-center gap-2">
+        {/* Quantity Stepper */}
+        <div className="flex items-center bg-page-bg border border-border rounded-xl p-0.5">
           <button
-            onClick={() => setQty((q) => Math.max(1, q - 1))}
-            disabled={outOfStock}
-            className="w-8 h-8 flex items-center justify-center text-white/40
-              hover:text-white/70 transition-colors disabled:opacity-30"
+            type="button"
+            onClick={() => setQty(Math.max(1, qty - 1))}
+            disabled={outOfStock || qty <= 1}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-text hover:bg-white disabled:opacity-30 transition-colors cursor-pointer"
+            aria-label="Decrease quantity"
           >
             <Minus size={14} />
           </button>
-          <span className="w-6 text-center text-white text-sm font-medium">{qty}</span>
+          <span className="w-7 text-center font-semibold text-xs text-text">
+            {qty}
+          </span>
           <button
-            onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+            type="button"
+            onClick={() => setQty(Math.min(maxQty, qty + 1))}
             disabled={outOfStock || qty >= maxQty}
-            className="w-8 h-8 flex items-center justify-center text-white/40
-              hover:text-white/70 transition-colors disabled:opacity-30"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-text hover:bg-white disabled:opacity-30 transition-colors cursor-pointer"
+            aria-label="Increase quantity"
           >
             <Plus size={14} />
           </button>
         </div>
 
+        {/* Add to Cart button */}
         <button
+          type="button"
           onClick={handleAdd}
           disabled={outOfStock}
-          className={`flex-1 h-8 rounded-lg text-xs font-semibold transition-all
-            duration-150 active:scale-95
-            ${added
-              ? 'bg-emerald-500 text-white'
-              : outOfStock
-                ? 'bg-white/5 text-white/20 cursor-not-allowed'
-                : 'bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/20'
-            }`}
+          className={`flex-1 h-9 px-3 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+            outOfStock
+              ? 'bg-page-bg text-muted cursor-not-allowed border border-border'
+              : justAdded
+              ? 'bg-success text-white shadow-xs'
+              : 'bg-primary text-white hover:bg-primary-hover shadow-xs'
+          }`}
         >
-          {added ? '✓ Added' : outOfStock ? 'No Stock' : 'Add'}
+          {justAdded ? (
+            <>
+              <Check size={14} />
+              <span>Added</span>
+            </>
+          ) : (
+            <>
+              <Plus size={14} />
+              <span>Add</span>
+            </>
+          )}
         </button>
-      </div>
-
-      {/* Stock indicator */}
-      <div className="mt-2 flex items-center justify-between">
-        <span className={`text-[10px] ${
-          outOfStock ? 'text-red-400' : isLow ? 'text-amber-400' : 'text-white/20'
-        }`}>
-          {outOfStock ? 'OUT OF STOCK' : `${product.stockInPieces} pcs left`}
-        </span>
       </div>
     </div>
   );
