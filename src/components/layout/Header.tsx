@@ -1,234 +1,99 @@
-// ============================================
-// Yusluv — Header Component
-// ============================================
-
-import { useState, useRef } from 'react';
-import { Settings, Download, Upload, LogOut, X } from 'lucide-react';
+import { useState } from 'react';
+import { Menu, Search, Bell } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { downloadJSON, downloadInventoryCSV, readJSONFile } from '../../lib/export';
+import { useInventory } from '../../context/InventoryContext';
+import SearchBar from '../ui/SearchBar';
+import GlobalSearchModal from './GlobalSearchModal';
+import NotificationsModal from './NotificationsModal';
+import SettingsModal from './SettingsModal';
 
-export default function Header() {
-  const { logOut, changePin, user } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [showChangePin, setShowChangePin] = useState(false);
-  const [oldPin, setOldPin] = useState('');
-  const [newPin, setNewPin] = useState('');
-  const [confirmNewPin, setConfirmNewPin] = useState('');
-  const [pinError, setPinError] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
+interface HeaderProps {
+  onOpenMobileMenu: () => void;
+}
 
-  const handleExportJSON = async () => {
-    await downloadJSON();
-    setMenuOpen(false);
-  };
+export default function Header({ onOpenMobileMenu }: HeaderProps) {
+  const { user } = useAuth();
+  const { getLowStockProducts } = useInventory();
 
-  const handleExportCSV = async () => {
-    await downloadInventoryCSV();
-    setMenuOpen(false);
-  };
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImporting(true);
-    try {
-      await readJSONFile(file);
-      // Note: import from JSON backup — data goes into Firestore via context
-      alert('Import from backup is currently not supported in cloud sync mode.\nPlease add data directly through the app.');
-    } catch {
-      alert('Failed to import data. Make sure the file is a valid Yusluv backup.');
-    } finally {
-      setImporting(false);
-      setMenuOpen(false);
-    }
-  };
-
-  const handleChangePin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPinError('');
-    if (oldPin.length !== 4 || newPin.length !== 4 || confirmNewPin.length !== 4) {
-      setPinError('PINs must be exactly 4 digits');
-      return;
-    }
-    if (newPin !== confirmNewPin) {
-      setPinError('New PINs do not match');
-      return;
-    }
-    const success = await changePin(oldPin, newPin);
-    if (success) {
-      setShowChangePin(false);
-      setOldPin('');
-      setNewPin('');
-      setConfirmNewPin('');
-      alert('PIN changed successfully!');
-    } else {
-      setPinError('Incorrect old PIN');
-    }
-  };
+  const lowStockCount = getLowStockProducts().length;
+  const merchantName = user?.email?.split('@')[0] || 'Merchant';
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-[#0a0a0f]/90 backdrop-blur-xl border-b border-white/5">
-      <div className="flex items-center justify-between px-4 h-14">
-        <h1 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-purple-200
-          bg-clip-text text-transparent tracking-tight">
-          Yusluv
-        </h1>
-
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center
-            justify-center transition-all duration-150 active:scale-95"
-        >
-          {menuOpen ? <X size={18} className="text-white/60" /> : <Settings size={18} className="text-white/60" />}
-        </button>
-      </div>
-
-      {/* Dropdown */}
-      {menuOpen && (
-        <div className="absolute right-4 top-14 w-56 bg-[#161622] border border-white/10
-          rounded-2xl shadow-2xl shadow-black/50 overflow-hidden animate-fade-in z-50">
+      <header className="sticky top-0 z-30 bg-card border-b border-border h-16 px-4 md:px-6 flex items-center justify-between gap-4">
+        {/* Left Side: Mobile Menu Button + Desktop Search Bar */}
+        <div className="flex items-center gap-3 flex-1 max-w-xl">
+          {/* Hamburger Menu on Mobile */}
           <button
-            onClick={handleExportJSON}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/80
-              hover:bg-white/5 transition-colors"
+            type="button"
+            onClick={onOpenMobileMenu}
+            className="lg:hidden p-2 rounded-xl text-muted hover:text-text hover:bg-page-bg transition-colors"
+            aria-label="Open navigation menu"
           >
-            <Download size={16} className="text-purple-400" />
-            Export Backup (JSON)
+            <Menu size={22} />
           </button>
-          <button
-            onClick={handleExportCSV}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/80
-              hover:bg-white/5 transition-colors"
-          >
-            <Download size={16} className="text-purple-400" />
-            Export Inventory (CSV)
-          </button>
-          <div className="border-t border-white/5" />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={importing}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/80
-              hover:bg-white/5 transition-colors disabled:opacity-50"
-          >
-            <Upload size={16} className="text-blue-400" />
-            {importing ? 'Importing...' : 'Import Backup'}
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={handleImport}
-          />
-          <div className="border-t border-white/5" />
-          <button
-            onClick={() => {
-              setShowChangePin(true);
-              setMenuOpen(false);
-            }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/80
-              hover:bg-white/5 transition-colors"
-          >
-            <Settings size={16} className="text-white/50" />
-            Change PIN
-          </button>
-          <div className="border-t border-white/5" />
-          {user?.email && (
-            <div className="px-4 py-2 text-xs text-white/30 truncate border-t border-white/5">
-              {user.email}
-            </div>
-          )}
-          <button
-            onClick={() => {
-              logOut();
-              setMenuOpen(false);
-            }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400
-              hover:bg-red-500/10 transition-colors"
-          >
-            <LogOut size={16} />
-            Sign Out
-          </button>
-        </div>
-      )}
 
-      {/* Overlay to close menu */}
-      {menuOpen && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-
-      </header>
-
-      {/* Change PIN Modal */}
-      {showChangePin && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 pt-24 sm:pt-4 overflow-y-auto">
-          <div className="bg-[#161622] border border-white/10 rounded-2xl p-5 w-full max-w-sm shadow-2xl my-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-white">Change PIN</h3>
-              <button onClick={() => setShowChangePin(false)} className="text-white/50 hover:text-white">
-                <X size={20} />
-              </button>
-            </div>
-            {pinError && <p className="text-red-400 text-sm mb-3">{pinError}</p>}
-            <form onSubmit={handleChangePin} className="space-y-4">
-              <div>
-                <label className="block text-sm text-white/50 mb-1">Old PIN</label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={oldPin}
-                  onChange={(e) => setOldPin(e.target.value.replace(/\D/g, ''))}
-                  className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-white
-                    focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none"
-                  placeholder="Enter current 4-digit PIN"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-white/50 mb-1">New PIN</label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={newPin}
-                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                  className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-white
-                    focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none"
-                  placeholder="Enter new 4-digit PIN"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-white/50 mb-1">Confirm New PIN</label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={confirmNewPin}
-                  onChange={(e) => setConfirmNewPin(e.target.value.replace(/\D/g, ''))}
-                  className="w-full h-12 bg-white/5 border border-white/10 rounded-xl px-4 text-white
-                    focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none"
-                  placeholder="Re-enter new 4-digit PIN"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full h-12 bg-purple-600 hover:bg-purple-500 text-white font-semibold
-                  rounded-xl transition-colors mt-2"
-              >
-                Update PIN
-              </button>
-            </form>
+          {/* Desktop Search Input (Clicking opens search modal or allows inline search) */}
+          <div className="hidden sm:block w-full cursor-pointer" onClick={() => setSearchOpen(true)}>
+            <SearchBar
+              placeholder="Search for a product, customer, sale..."
+              readOnly
+              className="cursor-pointer"
+            />
           </div>
         </div>
-      )}
+
+        {/* Right Side: Search Icon (Mobile), Notifications Bell, Avatar & Merchant Name */}
+        <div className="flex items-center gap-2 sm:gap-4">
+          {/* Search Trigger on Mobile */}
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="sm:hidden p-2 rounded-xl text-muted hover:text-text hover:bg-page-bg transition-colors"
+            aria-label="Search"
+          >
+            <Search size={20} />
+          </button>
+
+          {/* Notifications Bell with Alert Dot */}
+          <button
+            type="button"
+            onClick={() => setNotificationsOpen(true)}
+            className="relative p-2 rounded-xl text-muted hover:text-text hover:bg-page-bg transition-colors cursor-pointer"
+            aria-label="Notifications"
+          >
+            <Bell size={20} />
+            {lowStockCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-accent-amber rounded-full ring-2 ring-white animate-pulse" />
+            )}
+          </button>
+
+          {/* Merchant Profile & Settings Trigger */}
+          <div
+            onClick={() => setSettingsOpen(true)}
+            className="flex items-center gap-3 pl-2 sm:border-l sm:border-border cursor-pointer group"
+          >
+            <div className="w-9 h-9 rounded-full bg-primary-tint border border-primary/20 text-primary font-bold text-xs flex items-center justify-center group-hover:ring-2 group-hover:ring-primary/20 transition-all">
+              {merchantName.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="hidden md:block text-left">
+              <p className="text-xs font-semibold text-text group-hover:text-primary transition-colors capitalize">
+                {merchantName}
+              </p>
+              <p className="text-[11px] text-muted">Admin</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Global Modals */}
+      <GlobalSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <NotificationsModal open={notificationsOpen} onClose={() => setNotificationsOpen(false)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 }
