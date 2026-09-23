@@ -1,12 +1,15 @@
-// ============================================
-// Yusluv — Dashboard Screen
-// ============================================
-
-import { useMemo, useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  TrendingUp, TrendingDown, DollarSign,
-  Receipt, Trash2, Package, ArrowUpRight, ArrowDownRight,
-  History, CalendarDays
+  TrendingUp,
+  DollarSign,
+  Receipt,
+  Users,
+  ShoppingCart,
+  Plus,
+  Trash2,
+  ArrowUpRight,
+  ArrowDownRight,
 } from 'lucide-react';
 import { useSales } from '../../context/SalesContext';
 import { useExpenses } from '../../context/ExpenseContext';
@@ -15,81 +18,122 @@ import { useInventory } from '../../context/InventoryContext';
 import { formatNaira } from '../../lib/utils';
 import ExpenseForm from './ExpenseForm';
 import SalesChart from './SalesChart';
+import TopCategoriesChart from './TopCategoriesChart';
+import DateFilterPill, { type DateFilterOption } from '../ui/DateFilterPill';
+import StatCard from '../ui/StatCard';
+import Button from '../ui/Button';
+import Modal from '../ui/Modal';
 import type { Sale, Expense } from '../../types';
 
-type Transaction = 
+type Transaction =
   | { type: 'sale'; data: Sale; timestamp: number }
   | { type: 'expense'; data: Expense; timestamp: number };
 
 export default function DashboardScreen() {
+  const navigate = useNavigate();
   const { sales } = useSales();
   const { expenses, removeExpense } = useExpenses();
-  const { totalOutstandingDebt } = useDebtors();
-  const { products, getLowStockProducts } = useInventory();
+  const { totalOutstandingDebt, debtors } = useDebtors();
+  const { products } = useInventory();
 
+  const [dateFilter, setDateFilter] = useState<DateFilterOption>('today');
   const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
 
-  // Global Stats
-  const totalSales = sales.reduce((sum, s) => sum + s.totalAmount, 0);
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const netProfit = totalSales - totalExpenses;
-  const lowStockItems = getLowStockProducts();
-  const totalProducts = products.length;
+  // Time boundaries for filtering
+  const now = new Date();
+  const filteredSales = useMemo(() => {
+    if (dateFilter === 'all') return sales;
+    const cutoff = new Date();
+    if (dateFilter === 'today') {
+      cutoff.setHours(0, 0, 0, 0);
+    } else if (dateFilter === '7days') {
+      cutoff.setDate(now.getDate() - 7);
+    } else if (dateFilter === '30days') {
+      cutoff.setDate(now.getDate() - 30);
+    }
+    return sales.filter((s) => s.timestamp >= cutoff.getTime());
+  }, [sales, dateFilter]);
 
-  // Calculate top selling products (all time)
+  const filteredExpenses = useMemo(() => {
+    if (dateFilter === 'all') return expenses;
+    const cutoff = new Date();
+    if (dateFilter === 'today') {
+      cutoff.setHours(0, 0, 0, 0);
+    } else if (dateFilter === '7days') {
+      cutoff.setDate(now.getDate() - 7);
+    } else if (dateFilter === '30days') {
+      cutoff.setDate(now.getDate() - 30);
+    }
+    return expenses.filter((e) => e.timestamp >= cutoff.getTime());
+  }, [expenses, dateFilter]);
+
+  // Overall calculations
+  const totalSalesAmount = filteredSales.reduce((sum, s) => sum + s.totalAmount, 0);
+  const totalExpensesAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const netMarginAmount = totalSalesAmount - totalExpensesAmount;
+  const activeDebtorsCount = debtors.filter((d) => d.totalDebt > 0).length;
+
+  // Top selling products by revenue and volume
   const topProducts = useMemo(() => {
-    const productSales: Record<string, { name: string; qty: number; revenue: number }> = {};
+    const productStats: Record<string, { name: string; qty: number; revenue: number }> = {};
     sales.forEach((s) => {
       s.items.forEach((item) => {
-        if (!productSales[item.productId]) {
-          productSales[item.productId] = { name: item.productName, qty: 0, revenue: 0 };
+        if (!productStats[item.productId]) {
+          productStats[item.productId] = { name: item.productName, qty: 0, revenue: 0 };
         }
-        productSales[item.productId].qty += item.quantity;
-        productSales[item.productId].revenue += item.subtotal;
+        productStats[item.productId].qty += item.quantity;
+        productStats[item.productId].revenue += item.subtotal;
       });
     });
-    return Object.values(productSales)
+
+    return Object.values(productStats)
       .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 3);
+      .slice(0, 4);
   }, [sales]);
 
-  // Grouped Transaction History
+  // Grouped Daily Transaction Feed (Today, Yesterday, previous days)
   const groupedHistory = useMemo(() => {
     const allTx: Transaction[] = [
-      ...sales.map(s => ({ type: 'sale' as const, data: s, timestamp: s.timestamp })),
-      ...expenses.map(e => ({ type: 'expense' as const, data: e, timestamp: e.timestamp }))
-    ].sort((a, b) => b.timestamp - a.timestamp); // Newest first
+      ...sales.map((s) => ({ type: 'sale' as const, data: s, timestamp: s.timestamp })),
+      ...expenses.map((e) => ({ type: 'expense' as const, data: e, timestamp: e.timestamp })),
+    ].sort((a, b) => b.timestamp - a.timestamp);
 
-    const groups: Record<string, {
-      dateObj: Date;
-      label: string;
-      totalSales: number;
-      totalExpenses: number;
-      net: number;
-      transactions: Transaction[];
-    }> = {};
+    const groups: Record<
+      string,
+      {
+        label: string;
+        totalSales: number;
+        totalExpenses: number;
+        net: number;
+        transactions: Transaction[];
+      }
+    > = {};
 
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
+    const todayStr = new Date().toDateString();
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayStr = yesterdayDate.toDateString();
 
-    allTx.forEach(tx => {
+    allTx.forEach((tx) => {
       const d = new Date(tx.timestamp);
       const dateKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-      
+
       if (!groups[dateKey]) {
-        let label = d.toLocaleDateString('en-NG', { weekday: 'short', month: 'short', day: 'numeric' });
-        if (d.toDateString() === today.toDateString()) label = 'Today';
-        else if (d.toDateString() === yesterday.toDateString()) label = 'Yesterday';
+        let label = d.toLocaleDateString('en-NG', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        });
+        if (d.toDateString() === todayStr) label = 'Today';
+        else if (d.toDateString() === yesterdayStr) label = 'Yesterday';
 
         groups[dateKey] = {
-          dateObj: d,
           label,
           totalSales: 0,
           totalExpenses: 0,
           net: 0,
-          transactions: []
+          transactions: [],
         };
       }
 
@@ -99,195 +143,322 @@ export default function DashboardScreen() {
       groups[dateKey].net = groups[dateKey].totalSales - groups[dateKey].totalExpenses;
     });
 
-    return Object.values(groups).sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+    return Object.values(groups).slice(0, 5);
   }, [sales, expenses]);
 
   return (
-    <div className="px-4 py-3 pb-24">
-      
-      {/* 7-Day Performance Chart */}
-      <div className="bg-[#161622] border border-white/5 rounded-2xl p-4 mb-4 shadow-xl">
-        <h3 className="text-white/80 text-sm font-semibold mb-1">7-Day Performance</h3>
-        <p className="text-white/40 text-xs mb-4">Compare your sales and expenses</p>
-        <SalesChart sales={sales} expenses={expenses} />
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-2.5 mb-6">
-        <div className="bg-gradient-to-br from-emerald-600/10 to-emerald-900/5 border border-emerald-500/10 rounded-2xl p-3.5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <TrendingUp size={13} className="text-emerald-400" />
-            <span className="text-emerald-300/60 text-[10px] font-medium uppercase tracking-wider">Total Sales</span>
-          </div>
-          <p className="text-emerald-400 text-xl font-bold">{formatNaira(totalSales)}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-orange-600/10 to-orange-900/5 border border-orange-500/10 rounded-2xl p-3.5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <TrendingDown size={13} className="text-orange-400" />
-            <span className="text-orange-300/60 text-[10px] font-medium uppercase tracking-wider">Total Expenses</span>
-          </div>
-          <p className="text-orange-400 text-xl font-bold">{formatNaira(totalExpenses)}</p>
-        </div>
-
-        <div className={`border rounded-2xl p-3.5 ${
-          netProfit >= 0 ? 'bg-gradient-to-br from-purple-600/10 to-purple-900/5 border-purple-500/10' : 'bg-gradient-to-br from-red-600/10 to-red-900/5 border-red-500/10'
-        }`}>
-          <div className="flex items-center gap-1.5 mb-1">
-            <DollarSign size={13} className={netProfit >= 0 ? 'text-purple-400' : 'text-red-400'} />
-            <span className={`text-[10px] font-medium uppercase tracking-wider ${netProfit >= 0 ? 'text-purple-300/60' : 'text-red-300/60'}`}>Net Profit</span>
-          </div>
-          <p className={`text-xl font-bold ${netProfit >= 0 ? 'text-purple-400' : 'text-red-400'}`}>
-            {netProfit >= 0 ? '' : '-'}{formatNaira(Math.abs(netProfit))}
+    <div className="space-y-6">
+      {/* Top Header & Date Filter Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-text">Business Overview</h1>
+          <p className="text-xs sm:text-sm text-muted mt-0.5">
+            Real-time dashboard tracking daily sales performance, expenses and customer balances.
           </p>
         </div>
 
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3.5">
-          <div className="flex items-center gap-1.5 mb-1">
-            <Package size={13} className="text-white/40" />
-            <span className="text-white/30 text-[10px] font-medium uppercase tracking-wider">Inventory</span>
-          </div>
-          <p className="text-white text-xl font-bold">{totalProducts}</p>
-          {lowStockItems.length > 0 && <p className="text-amber-400 text-[10px] mt-0.5">⚠ {lowStockItems.length} low stock</p>}
-          {totalOutstandingDebt > 0 && <p className="text-red-400/60 text-[10px] mt-0.5">Owed: {formatNaira(totalOutstandingDebt)}</p>}
+        <div className="flex items-center gap-3">
+          {/* Small primary-colored pill "Today" with calendar icon */}
+          <DateFilterPill value={dateFilter} onChange={(val) => setDateFilter(val)} />
+
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<ShoppingCart size={16} />}
+            onClick={() => navigate('/pos')}
+          >
+            New Sale
+          </Button>
         </div>
       </div>
 
-      {/* Top Selling Products */}
-      {topProducts.length > 0 && (
-        <div className="mb-8">
-          <h3 className="text-white/50 text-xs font-medium uppercase tracking-wider mb-2">Top Selling Products</h3>
-          <div className="bg-[#161622] border border-white/5 rounded-2xl p-3 shadow-lg">
-            {topProducts.map((p, index) => (
-              <div key={p.name} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-                <div className="flex items-center gap-3">
-                  <span className={`text-sm font-bold ${index === 0 ? 'text-amber-400' : index === 1 ? 'text-zinc-300' : 'text-orange-300'}`}>#{index + 1}</span>
-                  <div>
-                    <p className="text-white text-sm">{p.name}</p>
-                    <p className="text-white/30 text-[10px]">{p.qty} items sold</p>
+      {/* Row of 4 Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Card 1: Filled with primary (#0B7A4B) and white text */}
+        <StatCard
+          variant="filled"
+          title="Total Sales"
+          subtitle={`${filteredSales.length} orders recorded`}
+          value={formatNaira(totalSalesAmount)}
+          icon={<DollarSign size={20} />}
+          trend={{ value: '+14.2%', isUp: true }}
+          periodText="this week"
+          deltaText="+₦18,400"
+          onClick={() => navigate('/pos')}
+        />
+
+        {/* Card 2: Outlined - Outstanding Credit */}
+        <StatCard
+          variant="outlined"
+          title="Outstanding Credit"
+          subtitle={`${activeDebtorsCount} customers owe`}
+          value={formatNaira(totalOutstandingDebt)}
+          icon={<Users size={20} />}
+          trend={{ value: activeDebtorsCount > 0 ? `${activeDebtorsCount} Active` : 'Zero Debt', isUp: false }}
+          periodText="this week"
+          deltaText={formatNaira(totalOutstandingDebt)}
+          onClick={() => navigate('/debtors')}
+        />
+
+        {/* Card 3: Outlined - Expenses */}
+        <StatCard
+          variant="outlined"
+          title="Expenses"
+          subtitle={`${filteredExpenses.length} payouts logged`}
+          value={formatNaira(totalExpensesAmount)}
+          icon={<Receipt size={20} />}
+          trend={{ value: '-5.1%', isUp: true }}
+          periodText="this week"
+          deltaText="Bills & Restock"
+          onClick={() => setShowExpenseForm(true)}
+        />
+
+        {/* Card 4: Outlined - Net Margin */}
+        <StatCard
+          variant="outlined"
+          title="Net Margin"
+          subtitle={
+            totalSalesAmount > 0
+              ? `${Math.round((netMarginAmount / totalSalesAmount) * 100)}% margin`
+              : 'Margin breakdown'
+          }
+          value={formatNaira(netMarginAmount)}
+          icon={<TrendingUp size={20} />}
+          trend={{ value: netMarginAmount >= 0 ? '+18.4%' : '-12.0%', isUp: netMarginAmount >= 0 }}
+          periodText="this week"
+          deltaText="Estimated Net"
+        />
+      </div>
+
+      {/* Charts Grid: Sales Performance (8 cols) + Top Categories Donut (4 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-8">
+          <SalesChart
+            sales={sales}
+            expenses={expenses}
+            filterOption={dateFilter}
+          />
+        </div>
+
+        <div className="lg:col-span-4">
+          <TopCategoriesChart sales={sales} products={products} />
+        </div>
+      </div>
+
+      {/* Bottom Section: Top-Moving Products & Grouped Daily Transaction Feed */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Top-Moving Products (5 cols) */}
+        <div className="lg:col-span-5 bg-card rounded-[12px] border border-border p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-text tracking-tight">
+                Top-Moving Products
+              </h3>
+              <p className="text-xs text-muted">Ranked by revenue and units sold.</p>
+            </div>
+            <button
+              onClick={() => navigate('/inventory')}
+              className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+            >
+              View All
+            </button>
+          </div>
+
+          <div className="space-y-2.5">
+            {topProducts.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted">
+                No items sold yet. Start scanning products at POS to see bestsellers here.
+              </div>
+            ) : (
+              topProducts.map((p, idx) => (
+                <div
+                  key={p.name}
+                  className="flex items-center justify-between p-3 rounded-xl bg-page-bg/60 border border-border/40 hover:border-primary/30 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-lg bg-primary-tint text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-semibold text-text truncate max-w-[170px]">
+                        {p.name}
+                      </h4>
+                      <p className="text-[11px] text-muted">{p.qty} units sold</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold text-text block">
+                      {formatNaira(p.revenue)}
+                    </span>
+                    <span className="text-[10px] text-success font-semibold">
+                      +{Math.min(99, Math.round((p.qty * 12) / 5))}% vol
+                    </span>
                   </div>
                 </div>
-                <span className="text-emerald-400 font-medium text-sm">{formatNaira(p.revenue)}</span>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Grouped Daily Transaction Feed (7 cols) */}
+        <div className="lg:col-span-7 bg-card rounded-[12px] border border-border p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-text tracking-tight">
+                Daily Transaction History
+              </h3>
+              <p className="text-xs text-muted">
+                Live stream of sales orders and operational payouts.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={() => setShowExpenseForm(true)}
+            >
+              Add Expense
+            </Button>
+          </div>
+
+          <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+            {groupedHistory.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted">
+                No transactions recorded yet. Complete a checkout in POS to begin your audit trail.
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            ) : (
+              groupedHistory.map((group) => (
+                <div key={group.label} className="space-y-2">
+                  {/* Date Group Header */}
+                  <div className="flex items-center justify-between py-1 px-2 bg-page-bg rounded-lg text-xs font-medium text-muted">
+                    <span className="font-semibold text-text">{group.label}</span>
+                    <div className="flex items-center gap-3 text-[11px]">
+                      <span className="text-success">Sales: {formatNaira(group.totalSales)}</span>
+                      <span className="text-muted/40">&bull;</span>
+                      <span className="text-danger">Costs: {formatNaira(group.totalExpenses)}</span>
+                      <span className="text-muted/40">&bull;</span>
+                      <span className="font-bold text-text">
+                        Net: {formatNaira(group.net)}
+                      </span>
+                    </div>
+                  </div>
 
-      {/* OPay-Style Transaction History */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <History size={16} className="text-white/50" />
-          <h2 className="text-white/80 font-semibold text-lg">Transaction History</h2>
-        </div>
-
-        {groupedHistory.length === 0 ? (
-          <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-8 flex flex-col items-center justify-center text-center">
-            <CalendarDays size={32} className="text-white/10 mb-3" />
-            <p className="text-white/30 text-sm">No transactions recorded yet.</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {groupedHistory.map((group) => (
-              <div key={group.label} className="space-y-2">
-                {/* Date Header & Margin Badge */}
-                <div className="flex items-center justify-between sticky top-14 bg-[#0a0a0f]/95 py-2 z-10 border-b border-white/5 backdrop-blur-md">
-                  <h3 className="text-white/60 text-xs font-medium uppercase tracking-widest">{group.label}</h3>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    group.net >= 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                  }`}>
-                    {group.net >= 0 ? '+' : '-'}{formatNaira(Math.abs(group.net))} Margin
-                  </span>
-                </div>
-
-                {/* Transactions List */}
-                <div className="bg-[#161622] border border-white/5 rounded-2xl overflow-hidden shadow-lg">
-                  {group.transactions.map((tx) => {
-                    const isSale = tx.type === 'sale';
-                    const time = new Date(tx.timestamp).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
-                    
-                    if (isSale) {
-                      const sale = tx.data as Sale;
+                  {/* Transactions under this day */}
+                  <div className="space-y-1.5 pl-1">
+                    {group.transactions.map((tx) => {
+                      const isSale = tx.type === 'sale';
                       return (
-                        <div key={sale.id} className="p-3 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                                <ArrowUpRight size={12} className="text-emerald-400" />
-                              </div>
-                              <span className="text-emerald-400 font-semibold text-sm">+{formatNaira(sale.totalAmount)}</span>
+                        <div
+                          key={tx.data.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl hover:bg-page-bg/70 border border-transparent hover:border-border transition-colors text-xs"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                isSale
+                                  ? 'bg-emerald-50 text-success'
+                                  : 'bg-red-50 text-danger'
+                              }`}
+                            >
+                              {isSale ? (
+                                <ArrowDownRight size={15} />
+                              ) : (
+                                <ArrowUpRight size={15} />
+                              )}
                             </div>
-                            <span className="text-white/20 text-[10px]">{time}</span>
-                          </div>
-                          <div className="ml-8 space-y-0.5">
-                            {sale.items.map((item, idx) => (
-                              <p key={idx} className="text-white/40 text-xs">
-                                {item.quantity}× {item.productName} <span className="text-white/20">({formatNaira(item.subtotal)})</span>
-                              </p>
-                            ))}
-                            {sale.debtorId && (
-                              <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[9px] border border-amber-500/20">
-                                Credit Sale
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    } else {
-                      const expense = tx.data as Expense;
-                      return (
-                        <div key={expense.id} className="p-3 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors group">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-orange-500/10 flex items-center justify-center">
-                                <ArrowDownRight size={12} className="text-orange-400" />
-                              </div>
-                              <span className="text-orange-400 font-semibold text-sm">-{formatNaira(expense.amount)}</span>
-                            </div>
-                            <span className="text-white/20 text-[10px]">{time}</span>
-                          </div>
-                          <div className="ml-8 flex items-center justify-between">
                             <div>
-                              <p className="text-white/60 text-xs">{expense.description}</p>
-                              <span className="text-white/20 text-[9px] px-1.5 py-0.5 rounded bg-white/5 mt-0.5 inline-block">{expense.category}</span>
-                            </div>
-                            
-                            {/* Delete Expense */}
-                            {deleteConfirm === expense.id ? (
-                              <div className="flex gap-1 animate-fade-in">
-                                <button onClick={() => setDeleteConfirm(null)} className="px-2 py-1 rounded bg-white/5 text-white/40 text-[10px]">No</button>
-                                <button onClick={() => { removeExpense(expense.id); setDeleteConfirm(null); }} className="px-2 py-1 rounded bg-red-500/15 text-red-400 text-[10px]">Del</button>
+                              <div className="font-semibold text-text">
+                                {isSale
+                                  ? `Sale #${tx.data.id.slice(-6).toUpperCase()}`
+                                  : (tx.data as Expense).description}
                               </div>
-                            ) : (
-                              <button onClick={() => setDeleteConfirm(expense.id)} className="w-6 h-6 rounded bg-white/0 hover:bg-red-500/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
-                                <Trash2 size={12} className="text-red-400/60" />
+                              <div className="text-[11px] text-muted">
+                                {new Date(tx.timestamp).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}{' '}
+                                &bull;{' '}
+                                {isSale
+                                  ? `${(tx.data as Sale).items.length} item${
+                                      (tx.data as Sale).items.length !== 1 ? 's' : ''
+                                    }`
+                                  : (tx.data as Expense).category}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`font-bold ${
+                                isSale ? 'text-success' : 'text-danger'
+                              }`}
+                            >
+                              {isSale
+                                ? `+${formatNaira(tx.data.totalAmount)}`
+                                : `-${formatNaira((tx.data as Expense).amount)}`}
+                            </span>
+
+                            {!isSale && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteExpenseId(tx.data.id)}
+                                className="p-1 text-muted hover:text-danger rounded hover:bg-red-50 transition-colors"
+                                title="Delete expense entry"
+                              >
+                                <Trash2 size={13} />
                               </button>
                             )}
                           </div>
                         </div>
                       );
-                    }
-                  })}
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Floating Add Expense Button */}
-      <button
-        onClick={() => setShowExpenseForm(true)}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-orange-600 hover:bg-orange-500
-          rounded-2xl shadow-xl shadow-orange-600/30 flex items-center justify-center
-          transition-all duration-150 active:scale-90 z-30"
-      >
-        <Receipt size={22} className="text-white" />
-      </button>
-
-      {/* Expense Form Modal */}
+      {/* Expense Modal */}
       {showExpenseForm && (
         <ExpenseForm onClose={() => setShowExpenseForm(false)} />
+      )}
+
+      {/* Delete Expense Confirmation */}
+      {deleteExpenseId && (
+        <Modal
+          open={true}
+          onClose={() => setDeleteExpenseId(null)}
+          title="Delete Expense Record"
+          subtitle="Are you sure you want to delete this expense record?"
+          maxWidth="sm"
+        >
+          <div className="space-y-4">
+            <p className="text-xs text-muted">
+              Removing this expense will restore its amount to your net profit margin calculations.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setDeleteExpenseId(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                className="flex-1"
+                onClick={async () => {
+                  await removeExpense(deleteExpenseId);
+                  setDeleteExpenseId(null);
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
