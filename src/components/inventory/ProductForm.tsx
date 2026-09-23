@@ -1,11 +1,10 @@
-// ============================================
-// Yusluv — Product Form (Add / Edit / Restock)
-// ============================================
-
 import { useState } from 'react';
-import { X, Save, Plus } from 'lucide-react';
+import { Plus, RefreshCw, Edit3 } from 'lucide-react';
 import { useInventory } from '../../context/InventoryContext';
 import { CATEGORIES, type Category, type Product } from '../../types';
+import Modal from '../ui/Modal';
+import Button from '../ui/Button';
+import Input from '../ui/Input';
 
 interface ProductFormProps {
   product?: Product;
@@ -24,29 +23,51 @@ export default function ProductForm({ product, mode = 'add', onClose }: ProductF
   const [stock, setStock] = useState(product?.stockInPieces?.toString() || '');
   const [lowThreshold, setLowThreshold] = useState(product?.lowStockThreshold?.toString() || '10');
   const [restockQty, setRestockQty] = useState('');
+  const [restockType, setRestockType] = useState<'pieces' | 'bulks'>('pieces');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const isRestock = mode === 'restock';
+  const isEdit = mode === 'edit';
+
+  const modalTitle = isRestock
+    ? `Restock: ${product?.name}`
+    : isEdit
+    ? `Edit Product`
+    : `Add New Product`;
+
+  const modalSubtitle = isRestock
+    ? `Quickly add inventory units to this item.`
+    : isEdit
+    ? `Update pricing, packaging, and threshold details.`
+    : `Add a new item to your store catalog with bulk & piece rates.`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (mode === 'add' || mode === 'edit') {
+    if (!isRestock) {
       if (!name.trim()) return setError('Product name is required');
       if (!bulkPrice) return setError('Bulk price is required');
       if (!piecePrice) return setError('Piece price is required');
       if (!piecesPerBulk) return setError('Pieces per bulk is required');
-      if (!stock) return setError('Initial stock is required');
+      if (!stock) return setError('Current stock is required');
+    } else {
+      if (!restockQty || parseInt(restockQty) <= 0) {
+        return setError('Please enter a valid restock quantity');
+      }
     }
 
     setSaving(true);
 
     try {
-      if (mode === 'restock' && product) {
-        await restockProduct(product.id, parseInt(restockQty) || 0);
-      } else if (mode === 'edit' && product) {
+      if (isRestock && product) {
+        const qty = parseInt(restockQty) || 0;
+        const piecesToAdd = restockType === 'bulks' ? qty * product.piecesPerBulk : qty;
+        await restockProduct(product.id, piecesToAdd);
+      } else if (isEdit && product) {
         await updateProduct(product.id, {
-          name,
+          name: name.trim(),
           category,
           bulkPrice: parseFloat(bulkPrice) || 0,
           piecePrice: parseFloat(piecePrice) || 0,
@@ -56,7 +77,7 @@ export default function ProductForm({ product, mode = 'add', onClose }: ProductF
         });
       } else {
         await addProduct({
-          name,
+          name: name.trim(),
           category,
           bulkPrice: parseFloat(bulkPrice) || 0,
           piecePrice: parseFloat(piecePrice) || 0,
@@ -67,194 +88,212 @@ export default function ProductForm({ product, mode = 'add', onClose }: ProductF
       }
       onClose();
     } catch (err) {
-      console.error(err);
+      console.error('Save product error:', err);
       setError('Failed to save product. Please try again.');
     } finally {
       setSaving(false);
     }
   };
 
-  const title =
-    mode === 'restock' ? `Restock: ${product?.name}` :
-    mode === 'edit' ? 'Edit Product' : 'Add New Product';
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end
-      sm:items-center justify-center animate-fade-in">
-      <div className="bg-[#161622] w-full max-w-md rounded-t-3xl sm:rounded-3xl
-        max-h-[90vh] overflow-y-auto border border-white/10 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/5">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center
-              justify-center transition-colors"
-          >
-            <X size={16} className="text-white/60" />
-          </button>
-        </div>
-
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={modalTitle}
+      subtitle={modalSubtitle}
+      maxWidth="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="mx-4 mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
-            <p className="text-red-400 text-sm text-center">{error}</p>
+          <div className="p-3 bg-red-50 border border-red-200 text-danger rounded-xl text-xs font-semibold">
+            {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4" noValidate>
-          {mode === 'restock' ? (
-            // Restock mode — simple qty input
+        {isRestock ? (
+          /* RESTOCK MODE */
+          <div className="space-y-4">
+            <div className="p-3.5 bg-page-bg rounded-xl border border-border flex items-center justify-between text-xs">
+              <div>
+                <p className="text-muted">Current Stock Available</p>
+                <p className="text-base font-bold text-text mt-0.5">
+                  {product?.stockInPieces || 0} pieces
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-muted">Packaging Ratio</p>
+                <p className="text-text font-semibold mt-0.5">
+                  1 bulk = {product?.piecesPerBulk || 1} pcs
+                </p>
+              </div>
+            </div>
+
+            {/* Restock Mode Toggle (Pieces vs Bulks) */}
+            <div className="flex gap-2 p-1 bg-page-bg rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => setRestockType('pieces')}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                  restockType === 'pieces'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-muted hover:text-text'
+                }`}
+              >
+                Add in Pieces
+              </button>
+              <button
+                type="button"
+                onClick={() => setRestockType('bulks')}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                  restockType === 'bulks'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-muted hover:text-text'
+                }`}
+              >
+                Add in Bulks / Cartons
+              </button>
+            </div>
+
+            <Input
+              label={`Quantity to Add (${restockType === 'bulks' ? 'Bulk Packs' : 'Individual Pieces'})`}
+              type="number"
+              min="1"
+              value={restockQty}
+              onChange={(e) => setRestockQty(e.target.value)}
+              placeholder="e.g. 24"
+              required
+              autoFocus
+            />
+
+            {restockQty && parseInt(restockQty) > 0 && product && (
+              <p className="text-xs text-primary font-medium">
+                New total stock will be{' '}
+                <strong className="font-bold">
+                  {product.stockInPieces +
+                    (restockType === 'bulks'
+                      ? parseInt(restockQty) * product.piecesPerBulk
+                      : parseInt(restockQty))}{' '}
+                  pieces
+                </strong>
+                .
+              </p>
+            )}
+
+            <div className="flex gap-3 pt-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                className="flex-1"
+                loading={saving}
+                icon={<RefreshCw size={16} />}
+              >
+                Confirm Restock
+              </Button>
+            </div>
+          </div>
+        ) : (
+          /* ADD / EDIT MODE */
+          <div className="space-y-3.5">
+            <Input
+              label="Product Name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Golden Penny Spaghetti 500g"
+              required
+              autoFocus
+            />
+
             <div>
-              <label className="block text-sm text-white/50 mb-1.5">
-                Additional Pieces to Add
+              <label className="block text-xs font-medium text-text mb-1.5">
+                Category
               </label>
-              <input
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as Category)}
+                className="w-full h-11 bg-white text-text text-sm rounded-xl border border-border px-3.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Pricing Row: Bulk Price vs Piece Price */}
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Bulk / Pack Price (₦)"
                 type="number"
-                value={restockQty}
-                onChange={(e) => setRestockQty(e.target.value)}
-                placeholder="e.g. 48"
-                className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10
-                  text-white placeholder:text-white/20 focus:border-purple-500
-                  focus:ring-1 focus:ring-purple-500/30 outline-none transition-all text-lg"
-                autoFocus
-                min="1"
+                step="any"
+                value={bulkPrice}
+                onChange={(e) => setBulkPrice(e.target.value)}
+                placeholder="e.g. 14000"
                 required
               />
-              <p className="text-white/30 text-xs mt-1">
-                Current stock: {product?.stockInPieces} pieces
-              </p>
+              <Input
+                label="Piece / Unit Price (₦)"
+                type="number"
+                step="any"
+                value={piecePrice}
+                onChange={(e) => setPiecePrice(e.target.value)}
+                placeholder="e.g. 700"
+                required
+              />
             </div>
-          ) : (
-            // Add / Edit mode
-            <>
-              <div>
-                <label className="block text-sm text-white/50 mb-1.5">Product Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Peak Milk"
-                  className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10
-                    text-white placeholder:text-white/20 focus:border-purple-500
-                    focus:ring-1 focus:ring-purple-500/30 outline-none transition-all"
-                  required
-                />
-              </div>
 
-              <div>
-                <label className="block text-sm text-white/50 mb-1.5">Category</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as Category)}
-                  className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10
-                    text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30
-                    outline-none transition-all appearance-none"
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c} className="bg-[#161622]">
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Packaging & Stock Row */}
+            <div className="grid grid-cols-3 gap-3">
+              <Input
+                label="Pcs Per Bulk"
+                type="number"
+                min="1"
+                value={piecesPerBulk}
+                onChange={(e) => setPiecesPerBulk(e.target.value)}
+                placeholder="12"
+                required
+              />
+              <Input
+                label="Stock (in pieces)"
+                type="number"
+                min="0"
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                placeholder="50"
+                required
+              />
+              <Input
+                label="Low Alert At"
+                type="number"
+                min="1"
+                value={lowThreshold}
+                onChange={(e) => setLowThreshold(e.target.value)}
+                placeholder="10"
+                required
+              />
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-white/50 mb-1.5">Bulk Price (₦)</label>
-                  <input
-                    type="number"
-                    value={bulkPrice}
-                    onChange={(e) => setBulkPrice(e.target.value)}
-                    placeholder="e.g. 3600"
-                    className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10
-                      text-white placeholder:text-white/20 focus:border-purple-500
-                      focus:ring-1 focus:ring-purple-500/30 outline-none transition-all"
-                    min="0"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-white/50 mb-1.5">Piece Price (₦)</label>
-                  <input
-                    type="number"
-                    value={piecePrice}
-                    onChange={(e) => setPiecePrice(e.target.value)}
-                    placeholder="e.g. 350"
-                    className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10
-                      text-white placeholder:text-white/20 focus:border-purple-500
-                      focus:ring-1 focus:ring-purple-500/30 outline-none transition-all"
-                    min="0"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-white/50 mb-1.5">Pieces per Bulk</label>
-                  <input
-                    type="number"
-                    value={piecesPerBulk}
-                    onChange={(e) => setPiecesPerBulk(e.target.value)}
-                    placeholder="e.g. 12"
-                    className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10
-                      text-white placeholder:text-white/20 focus:border-purple-500
-                      focus:ring-1 focus:ring-purple-500/30 outline-none transition-all"
-                    min="1"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-white/50 mb-1.5">
-                    Initial Stock (pcs)
-                  </label>
-                  <input
-                    type="number"
-                    value={stock}
-                    onChange={(e) => setStock(e.target.value)}
-                    placeholder="e.g. 48"
-                    className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10
-                      text-white placeholder:text-white/20 focus:border-purple-500
-                      focus:ring-1 focus:ring-purple-500/30 outline-none transition-all"
-                    min="0"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm text-white/50 mb-1.5">
-                  Low Stock Alert (pieces)
-                </label>
-                <input
-                  type="number"
-                  value={lowThreshold}
-                  onChange={(e) => setLowThreshold(e.target.value)}
-                  placeholder="e.g. 10"
-                  className="w-full h-12 px-4 rounded-xl bg-white/5 border border-white/10
-                    text-white placeholder:text-white/20 focus:border-purple-500
-                    focus:ring-1 focus:ring-purple-500/30 outline-none transition-all"
-                  min="0"
-                />
-              </div>
-            </>
-          )}
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full h-12 bg-purple-600 hover:bg-purple-500 text-white font-semibold
-              rounded-xl flex items-center justify-center gap-2 transition-all duration-150
-              active:scale-[0.98] disabled:opacity-50 shadow-lg shadow-purple-600/20 mt-2"
-          >
-            {mode === 'restock' ? (
-              <><Plus size={18} /> Add Stock</>
-            ) : (
-              <><Save size={18} /> {mode === 'edit' ? 'Save Changes' : 'Add Product'}</>
-            )}
-          </button>
-        </form>
-      </div>
-    </div>
+            <div className="flex gap-3 pt-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                className="flex-1"
+                loading={saving}
+                icon={isEdit ? <Edit3 size={16} /> : <Plus size={16} />}
+              >
+                {isEdit ? 'Save Changes' : 'Create Product'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </form>
+    </Modal>
   );
 }
