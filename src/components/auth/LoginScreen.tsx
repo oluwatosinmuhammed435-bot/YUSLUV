@@ -1,10 +1,8 @@
-// ============================================
-// Yusluv — OPay-Style Login / Sign-up Screen
-// ============================================
-
 import { useState, useCallback } from 'react';
-import { Eye, EyeOff, ArrowRight, ChevronLeft } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import Button from '../ui/Button';
+import Input from '../ui/Input';
 
 type Mode = 'signin' | 'signup';
 
@@ -54,171 +52,136 @@ export default function LoginScreen() {
   }, [mode, email, password, confirmPassword, signIn, signUp, clearFirebaseError]);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex flex-col overflow-hidden">
-
-      {/* Ambient glow */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[700px]
-          bg-purple-900/20 rounded-full blur-[130px]" />
-        <div className="absolute -bottom-1/4 right-[-20%] w-[500px] h-[500px]
-          bg-purple-800/10 rounded-full blur-[100px]" />
-      </div>
-
-      {/* ── HERO top section ── */}
-      <div className="relative flex flex-col items-center justify-center pt-20 pb-10 px-8">
-        {/* Logo */}
-        <div className="w-20 h-20 rounded-[24px] bg-gradient-to-br from-purple-500 via-purple-600 to-purple-900
-          flex items-center justify-center shadow-2xl shadow-purple-600/40 ring-1 ring-purple-400/20 mb-6">
-          <span className="text-3xl font-black text-white select-none tracking-tighter">Y</span>
+    <div className="min-h-screen bg-page-bg text-text flex flex-col justify-center items-center px-4 py-12 antialiased">
+      <div className="w-full max-w-md space-y-6">
+        {/* Brand Header */}
+        <div className="text-center space-y-2">
+          <div className="w-16 h-16 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/25 mx-auto ring-4 ring-primary-tint">
+            <span className="text-3xl font-black text-white tracking-tight">Y</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-text">
+            {mode === 'signin' ? 'Welcome back to Yusluv' : 'Create Merchant Account'}
+          </h1>
+          <p className="text-xs sm:text-sm text-muted">
+            {mode === 'signin'
+              ? 'Sign in to access your store inventory and sales register'
+              : 'Start tracking inventory, debtors, and POS sales today'}
+          </p>
         </div>
 
-        <h1 className="text-white text-3xl font-bold tracking-tight mb-1">
-          {mode === 'signin' ? 'Welcome back' : 'Create account'}
-        </h1>
-        <p className="text-white/35 text-sm text-center leading-relaxed">
-          {mode === 'signin'
-            ? 'Sign in to continue to Yusluv'
-            : 'Start managing your business today'}
-        </p>
-      </div>
+        {/* Form Card */}
+        <div className="bg-card rounded-2xl border border-border p-6 sm:p-8 shadow-sm space-y-5">
+          {/* Mode Switcher Tabs */}
+          <div className="flex bg-page-bg p-1 rounded-xl border border-border">
+            <button
+              type="button"
+              onClick={() => switchMode('signin')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                mode === 'signin'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-muted hover:text-text'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('signup')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                mode === 'signup'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-muted hover:text-text'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
 
-      {/* ── FORM section ── */}
-      <div className="relative flex-1 flex flex-col px-6 pb-10">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full max-w-sm mx-auto">
+          {/* Error Message */}
+          {displayError && (
+            <div className="p-3.5 bg-red-50 border border-red-200 text-danger rounded-xl text-xs font-medium animate-fade-in">
+              {displayError}
+            </div>
+          )}
 
-          {/* Email */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-white/40 text-xs font-medium uppercase tracking-wider pl-1">
-              Email address
-            </label>
-            <input
-              id="login-email"
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              label="Email Address"
               type="email"
               value={email}
-              onChange={(e) => { setEmail(e.target.value); setLocalError(''); clearFirebaseError(); }}
-              placeholder="you@example.com"
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setLocalError('');
+                clearFirebaseError();
+              }}
+              placeholder="name@store.com"
               autoComplete="email"
-              autoCapitalize="none"
-              className="w-full h-14 bg-white/[0.05] border border-white/[0.09] rounded-2xl
-                px-4 text-white text-[15px] placeholder-white/20 outline-none
-                focus:border-purple-500/60 focus:bg-white/[0.07] transition-all duration-200"
+              required
             />
-          </div>
 
-          {/* Password */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-white/40 text-xs font-medium uppercase tracking-wider pl-1">
-              Password
-            </label>
-            <div className="relative">
-              <input
-                id="login-password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setLocalError(''); clearFirebaseError(); }}
-                placeholder={mode === 'signup' ? 'At least 6 characters' : '••••••••'}
-                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                className="w-full h-14 bg-white/[0.05] border border-white/[0.09] rounded-2xl
-                  px-4 pr-12 text-white text-[15px] placeholder-white/20 outline-none
-                  focus:border-purple-500/60 focus:bg-white/[0.07] transition-all duration-200"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30
-                  hover:text-white/60 transition-colors"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Confirm password (sign-up only) */}
-          {mode === 'signup' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-white/40 text-xs font-medium uppercase tracking-wider pl-1">
-                Confirm password
+            <div>
+              <label className="block text-xs font-medium text-text mb-1.5">
+                Password
               </label>
-              <input
-                id="login-confirm-password"
-                type={showPassword ? 'text' : 'password'}
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setLocalError('');
+                    clearFirebaseError();
+                  }}
+                  placeholder={mode === 'signup' ? 'At least 6 characters' : '••••••••'}
+                  autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                  className="w-full h-11 bg-white text-text text-sm rounded-xl border border-border pl-3.5 pr-11 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted/60"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-text p-1 cursor-pointer"
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {mode === 'signup' && (
+              <Input
+                label="Confirm Password"
+                type="password"
                 value={confirmPassword}
-                onChange={(e) => { setConfirmPassword(e.target.value); setLocalError(''); }}
-                placeholder="Repeat your password"
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  setLocalError('');
+                  clearFirebaseError();
+                }}
+                placeholder="Re-enter password"
                 autoComplete="new-password"
-                className="w-full h-14 bg-white/[0.05] border border-white/[0.09] rounded-2xl
-                  px-4 text-white text-[15px] placeholder-white/20 outline-none
-                  focus:border-purple-500/60 focus:bg-white/[0.07] transition-all duration-200"
+                required
               />
-            </div>
-          )}
-
-          {/* Error */}
-          {displayError && (
-            <div className="flex items-center gap-2.5 bg-red-500/[0.08] border border-red-500/20
-              rounded-2xl px-4 py-3 animate-fade-in">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
-              <p className="text-red-400 text-sm leading-snug">{displayError}</p>
-            </div>
-          )}
-
-          {/* Submit */}
-          <button
-            id="login-submit"
-            type="submit"
-            disabled={isFirebaseLoading}
-            className="w-full h-14 rounded-2xl bg-gradient-to-r from-purple-600 to-purple-700
-              text-white text-[15px] font-semibold shadow-xl shadow-purple-600/30
-              hover:from-purple-500 hover:to-purple-600 active:scale-[0.98]
-              disabled:opacity-50 disabled:cursor-not-allowed
-              transition-all duration-200 flex items-center justify-center gap-2 mt-2"
-          >
-            {isFirebaseLoading ? (
-              <>
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                {mode === 'signin' ? 'Signing in…' : 'Creating account…'}
-              </>
-            ) : (
-              <>
-                {mode === 'signin' ? 'Sign in' : 'Create account'}
-                <ArrowRight size={17} />
-              </>
             )}
-          </button>
-        </form>
 
-        {/* Switch mode */}
-        <div className="flex items-center justify-center gap-2 mt-8">
-          {mode === 'signin' ? (
-            <>
-              <span className="text-white/30 text-sm">Don't have an account?</span>
-              <button
-                onClick={() => switchMode('signup')}
-                className="text-purple-400 text-sm font-semibold hover:text-purple-300 transition-colors"
-              >
-                Create one
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => switchMode('signin')}
-                className="flex items-center gap-1 text-white/30 text-sm hover:text-white/60
-                  transition-colors"
-              >
-                <ChevronLeft size={15} />
-                Back to sign in
-              </button>
-            </>
-          )}
-        </div>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="w-full mt-2 font-bold shadow-md shadow-primary/20"
+              loading={isFirebaseLoading}
+              icon={<ArrowRight size={16} />}
+              iconPosition="right"
+            >
+              {mode === 'signin' ? 'Sign In to Register' : 'Complete Registration'}
+            </Button>
+          </form>
 
-        {/* Cloud sync badge */}
-        <div className="flex items-center justify-center gap-2 mt-6">
-          <div className="flex items-center gap-2 bg-emerald-500/8 border border-emerald-500/15
-            rounded-full px-3.5 py-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <p className="text-emerald-400/70 text-xs">Cloud sync · Data secured</p>
+          {/* Offline support note */}
+          <div className="pt-2 text-center">
+            <p className="text-[11px] text-muted">
+              Yusluv securely syncs your store database offline & in cloud.
+            </p>
           </div>
         </div>
       </div>

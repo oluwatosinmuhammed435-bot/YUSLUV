@@ -1,5 +1,5 @@
 // ============================================
-// Yusluv — OPay-Style PinPad Component
+// Yusluv — Clean Emerald PIN Pad
 // ============================================
 
 import { Delete } from 'lucide-react';
@@ -9,8 +9,6 @@ interface PinPadProps {
   onDelete: () => void;
   onConfirm?: () => void;
   disabled?: boolean;
-  /** If true, pressing the 4th digit auto-confirms (no OK button needed) */
-  autoSubmit?: boolean;
 }
 
 const ROWS = [
@@ -27,26 +25,23 @@ export default function PinPad({
   disabled,
 }: PinPadProps) {
   return (
-    <div className="flex flex-col gap-3 w-full max-w-[300px] mx-auto select-none">
+    <div className="flex flex-col gap-3 w-full max-w-[280px] mx-auto select-none">
       {ROWS.map((row, ri) => (
         <div key={ri} className="flex gap-3 justify-center">
           {row.map((key, ci) => {
             if (key === '') {
-              // Bottom-left: OK button or empty spacer
               return onConfirm ? (
                 <button
                   key={ci}
+                  type="button"
                   onClick={onConfirm}
                   disabled={disabled}
-                  className="w-20 h-20 rounded-full bg-purple-600/20 border border-purple-500/30
-                    text-purple-300 font-bold text-sm tracking-wider transition-all duration-150
-                    active:scale-90 active:bg-purple-600/40 disabled:opacity-30
-                    disabled:cursor-not-allowed hover:bg-purple-600/30 hover:border-purple-400/50"
+                  className="w-18 h-18 rounded-full bg-primary-tint border border-primary/20 text-primary font-bold text-sm tracking-wider transition-all duration-150 active:scale-90 active:bg-primary active:text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-100 cursor-pointer flex items-center justify-center shadow-xs"
                 >
                   OK
                 </button>
               ) : (
-                <div key={ci} className="w-20 h-20" />
+                <div key={ci} className="w-18 h-18" />
               );
             }
 
@@ -54,12 +49,11 @@ export default function PinPad({
               return (
                 <button
                   key={ci}
+                  type="button"
                   onClick={onDelete}
                   disabled={disabled}
-                  className="w-20 h-20 rounded-full bg-white/5 border border-white/10
-                    text-white/60 flex items-center justify-center transition-all duration-150
-                    active:scale-90 active:bg-white/15 disabled:opacity-30 hover:bg-white/10
-                    hover:border-white/20 hover:text-white/80"
+                  className="w-18 h-18 rounded-full bg-white border border-border text-muted hover:text-text flex items-center justify-center transition-all duration-150 active:scale-90 active:bg-page-bg disabled:opacity-30 cursor-pointer shadow-xs"
+                  aria-label="Delete digit"
                 >
                   <Delete size={20} />
                 </button>
@@ -69,13 +63,10 @@ export default function PinPad({
             return (
               <button
                 key={ci}
+                type="button"
                 onClick={() => onDigit(key)}
                 disabled={disabled}
-                className="w-20 h-20 rounded-full bg-white/[0.07] border border-white/10
-                  text-white text-2xl font-light transition-all duration-100
-                  active:scale-90 active:bg-purple-600/30 active:border-purple-500/40
-                  disabled:opacity-30 hover:bg-white/12 hover:border-white/20
-                  flex items-center justify-center"
+                className="w-18 h-18 rounded-full bg-white border border-border text-text text-2xl font-medium transition-all duration-100 active:scale-90 active:bg-primary-tint active:border-primary/40 disabled:opacity-30 hover:border-primary/30 hover:bg-page-bg/60 flex items-center justify-center cursor-pointer shadow-xs"
               >
                 {key}
               </button>

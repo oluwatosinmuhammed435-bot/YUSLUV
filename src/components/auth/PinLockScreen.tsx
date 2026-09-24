@@ -1,11 +1,13 @@
 // ============================================
-// Yusluv — OPay-Style PIN Lock Screen
+// Yusluv — OPay-Style PIN Lock Screen (Emerald)
 // ============================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { LogOut } from 'lucide-react';
+import { LogOut, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import PinPad from './PinPad';
+import Modal from '../ui/Modal';
+import Button from '../ui/Button';
 
 export default function PinLockScreen() {
   const {
@@ -39,52 +41,53 @@ export default function PinLockScreen() {
     clearPinError();
   }, [clearPinError]);
 
-  // ── Submit logic (called by auto-submit effect via ref) ───────
-  // We store the latest version in a ref so the effect never goes stale
+  // ── Submit logic ─────────────────────────────────────────────
   const submitRef = useRef<(pin: string) => Promise<void>>(async () => {});
 
-  const submit = useCallback(async (currentPin: string) => {
-    if (busy) return;
+  const submit = useCallback(
+    async (currentPin: string) => {
+      if (busy) return;
 
-    if (isPinSet) {
-      // Unlock mode
-      setBusy(true);
-      const ok = await unlockWithPin(currentPin);
-      setBusy(false);
-      if (!ok) {
-        triggerShake();
-        setTimeout(() => setPin(''), 500);
-      } else {
-        setSuccess(true);
-      }
-    } else {
-      // Setup mode — first step: move to confirm
-      if (setupStep === 'enter') {
-        setConfirmPin('');
-        setSetupStep('confirm');
-        setError('');
-      } else {
-        // Second step: validate match
-        if (currentPin !== pin) {
-          setError("PINs don't match. Try again.");
+      if (isPinSet) {
+        // Unlock mode
+        setBusy(true);
+        const ok = await unlockWithPin(currentPin);
+        setBusy(false);
+        if (!ok) {
           triggerShake();
-          setTimeout(() => {
-            setConfirmPin('');
-            setPin('');
-            setSetupStep('enter');
-            setError('');
-          }, 800);
+          setTimeout(() => setPin(''), 500);
         } else {
-          setBusy(true);
-          await setupPin(pin);
-          setBusy(false);
           setSuccess(true);
         }
+      } else {
+        // Setup mode
+        if (setupStep === 'enter') {
+          setConfirmPin('');
+          setSetupStep('confirm');
+          setError('');
+        } else {
+          // Validate match
+          if (currentPin !== pin) {
+            setError("PINs don't match. Try again.");
+            triggerShake();
+            setTimeout(() => {
+              setConfirmPin('');
+              setPin('');
+              setSetupStep('enter');
+              setError('');
+            }, 800);
+          } else {
+            setBusy(true);
+            await setupPin(pin);
+            setBusy(false);
+            setSuccess(true);
+          }
+        }
       }
-    }
-  }, [busy, isPinSet, setupStep, pin, unlockWithPin, setupPin, triggerShake]);
+    },
+    [busy, isPinSet, setupStep, pin, unlockWithPin, setupPin, triggerShake]
+  );
 
-  // Keep the ref pointing to the latest submit
   useEffect(() => {
     submitRef.current = submit;
   }, [submit]);
@@ -93,22 +96,24 @@ export default function PinLockScreen() {
   useEffect(() => {
     const active = setupStep === 'confirm' ? confirmPin : pin;
     if (active.length === 4 && !busy) {
-      // Small delay so the last dot animates before submission
       const t = setTimeout(() => submitRef.current(active), 140);
       return () => clearTimeout(t);
     }
   }, [pin, confirmPin, setupStep, busy]);
 
   // ── Event handlers ────────────────────────────────────────────
-  const handleDigit = useCallback((digit: string) => {
-    if (busy || success) return;
-    clearError();
-    if (isPinSet || setupStep === 'enter') {
-      setPin((p) => (p.length < 4 ? p + digit : p));
-    } else {
-      setConfirmPin((p) => (p.length < 4 ? p + digit : p));
-    }
-  }, [busy, success, isPinSet, setupStep, clearError]);
+  const handleDigit = useCallback(
+    (digit: string) => {
+      if (busy || success) return;
+      clearError();
+      if (isPinSet || setupStep === 'enter') {
+        setPin((p) => (p.length < 4 ? p + digit : p));
+      } else {
+        setConfirmPin((p) => (p.length < 4 ? p + digit : p));
+      }
+    },
+    [busy, success, isPinSet, setupStep, clearError]
+  );
 
   const handleDelete = useCallback(() => {
     if (busy || success) return;
@@ -125,54 +130,42 @@ export default function PinLockScreen() {
   const displayError = error || pinError;
 
   const heading = isPinSet
-    ? 'Enter your PIN'
+    ? 'Enter Terminal PIN'
     : setupStep === 'enter'
-    ? 'Create a PIN'
-    : 'Confirm your PIN';
+    ? 'Create Quick PIN'
+    : 'Confirm Quick PIN';
 
   const subText = isPinSet
-    ? user?.email ?? ''
+    ? user?.email ?? 'Quick unlock for counter register'
     : setupStep === 'enter'
-    ? 'Set a 4-digit PIN to secure your account'
-    : 'Re-enter your PIN to confirm';
+    ? 'Set a 4-digit numeric code to secure your counter'
+    : 'Re-enter your PIN to verify';
 
-  // ── Render ────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-between px-6 py-12 overflow-hidden">
-
-      {/* Ambient glow */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px]
-          bg-purple-900/20 rounded-full blur-[120px]" />
-        <div className="absolute -bottom-1/4 left-1/2 -translate-x-1/2 w-[400px] h-[400px]
-          bg-purple-800/10 rounded-full blur-[100px]" />
-      </div>
-
-      {/* ── TOP: Brand ── */}
-      <div className="relative flex flex-col items-center gap-3 pt-4">
+    <div className="min-h-screen bg-page-bg text-text flex flex-col items-center justify-between px-6 py-10 select-none antialiased">
+      {/* ── TOP: Brand & Logo ── */}
+      <div className="flex flex-col items-center gap-2 pt-2">
         <div
-          className={`w-20 h-20 rounded-[22px] bg-gradient-to-br from-purple-500 via-purple-600 to-purple-900
-            flex items-center justify-center shadow-2xl shadow-purple-600/40
-            ring-1 ring-purple-400/20 transition-all duration-500
-            ${success ? 'scale-110 ring-purple-400/60 shadow-purple-400/50' : ''}`}
+          className={`w-16 h-16 rounded-2xl bg-primary text-white flex items-center justify-center shadow-md shadow-primary/25 ring-4 ring-primary-tint transition-all duration-500 ${
+            success ? 'scale-110 bg-success ring-emerald-200' : ''
+          }`}
         >
-          <span className="text-3xl font-black text-white select-none tracking-tighter">Y</span>
+          <span className="text-2xl font-black text-white tracking-tight">Y</span>
         </div>
-        <p className="text-white/20 text-[11px] uppercase tracking-[0.2em] font-medium">
-          Yusluv · Retail Manager
+        <p className="text-muted text-[11px] uppercase tracking-wider font-semibold">
+          Yusluv &bull; Retail Manager
         </p>
       </div>
 
       {/* ── MIDDLE: Labels + Dots + Error ── */}
-      <div className="relative flex flex-col items-center gap-5">
-
+      <div className="flex flex-col items-center gap-4 my-auto">
         <div className="text-center">
-          <h2 className="text-white text-xl font-semibold tracking-tight">{heading}</h2>
-          <p className="text-white/35 text-xs mt-1.5 leading-relaxed">{subText}</p>
+          <h2 className="text-text text-xl font-bold tracking-tight">{heading}</h2>
+          <p className="text-muted text-xs mt-1 max-w-xs">{subText}</p>
         </div>
 
         {/* PIN dots */}
-        <div className={`flex gap-5 my-2 ${shake ? 'animate-shake' : ''}`}>
+        <div className={`flex gap-4 my-2 ${shake ? 'animate-shake' : ''}`}>
           {[0, 1, 2, 3].map((i) => {
             const filled = i < displayPin.length;
             return (
@@ -180,12 +173,12 @@ export default function PinLockScreen() {
                 key={i}
                 className={`rounded-full transition-all duration-200 ${
                   filled
-                    ? `w-4 h-4 shadow-lg ${
+                    ? `w-4 h-4 shadow-sm ${
                         success
-                          ? 'bg-emerald-400 shadow-emerald-400/50'
-                          : 'bg-purple-500 shadow-purple-500/60'
+                          ? 'bg-success shadow-success/30'
+                          : 'bg-primary shadow-primary/40'
                       }`
-                    : 'w-3.5 h-3.5 border-2 border-white/20'
+                    : 'w-3.5 h-3.5 border-2 border-border bg-white'
                 }`}
                 style={{ transform: filled ? 'scale(1.2)' : 'scale(1)' }}
               />
@@ -193,10 +186,10 @@ export default function PinLockScreen() {
           })}
         </div>
 
-        {/* Error message — fixed height so layout doesn't jump */}
+        {/* Error message */}
         <div className="h-5">
           {displayError && (
-            <p className="text-red-400 text-xs animate-fade-in font-medium text-center">
+            <p className="text-danger text-xs font-semibold animate-fade-in text-center">
               {displayError}
             </p>
           )}
@@ -205,16 +198,22 @@ export default function PinLockScreen() {
         {/* Setup step progress indicator */}
         {!isPinSet && (
           <div className="flex gap-1.5">
-            <div className={`h-[3px] rounded-full transition-all duration-300
-              ${setupStep === 'enter' ? 'w-7 bg-purple-500' : 'w-3 bg-white/15'}`} />
-            <div className={`h-[3px] rounded-full transition-all duration-300
-              ${setupStep === 'confirm' ? 'w-7 bg-purple-500' : 'w-3 bg-white/15'}`} />
+            <div
+              className={`h-1 rounded-full transition-all duration-300 ${
+                setupStep === 'enter' ? 'w-8 bg-primary' : 'w-3 bg-border'
+              }`}
+            />
+            <div
+              className={`h-1 rounded-full transition-all duration-300 ${
+                setupStep === 'confirm' ? 'w-8 bg-primary' : 'w-3 bg-border'
+              }`}
+            />
           </div>
         )}
       </div>
 
-      {/* ── BOTTOM: Numpad + Actions ── */}
-      <div className="relative flex flex-col items-center gap-7 w-full">
+      {/* ── BOTTOM: Keypad + Actions ── */}
+      <div className="flex flex-col items-center gap-6 w-full max-w-sm pb-4">
         <PinPad
           onDigit={handleDigit}
           onDelete={handleDelete}
@@ -224,69 +223,67 @@ export default function PinLockScreen() {
         <div className="flex flex-col items-center gap-2">
           {isPinSet && !showResetConfirm && (
             <button
+              type="button"
               onClick={() => setShowResetConfirm(true)}
-              className="text-white/30 text-xs hover:text-purple-400 transition-colors px-4 py-1.5"
+              className="text-xs text-primary font-semibold hover:underline px-4 py-1.5 cursor-pointer"
             >
-              Forgot PIN?
+              Forgot Terminal PIN?
             </button>
           )}
 
           {!isPinSet && setupStep === 'confirm' && (
             <button
+              type="button"
               onClick={() => {
                 setSetupStep('enter');
                 setPin('');
                 setConfirmPin('');
                 setError('');
               }}
-              className="text-white/30 text-xs hover:text-white/60 transition-colors px-4 py-1.5"
+              className="text-xs text-muted hover:text-text font-medium px-4 py-1.5 cursor-pointer"
             >
-              ← Start over
+              &larr; Start over
             </button>
           )}
 
           <button
+            type="button"
             onClick={logOut}
-            className="flex items-center gap-1.5 text-white/20 text-xs
-              hover:text-white/45 transition-colors px-4 py-1.5"
+            className="flex items-center gap-1.5 text-xs text-muted hover:text-danger transition-colors px-4 py-1.5 cursor-pointer"
           >
-            <LogOut size={11} />
-            Sign out
+            <LogOut size={13} />
+            <span>Sign out of account</span>
           </button>
         </div>
       </div>
 
-      {/* ── Reset confirmation bottom sheet ── */}
+      {/* ── Reset confirmation dialog ── */}
       {showResetConfirm && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end
-            justify-center pb-8 px-5 animate-fade-in"
-          onClick={() => setShowResetConfirm(false)}
+        <Modal
+          open={true}
+          onClose={() => setShowResetConfirm(false)}
+          title="Reset Terminal PIN"
+          subtitle="Are you sure you want to remove this PIN?"
+          maxWidth="sm"
         >
-          <div
-            className="bg-[#16161e] border border-white/10 rounded-3xl p-6 w-full max-w-sm
-              shadow-2xl animate-slide-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20
-                flex items-center justify-center mx-auto mb-3 text-2xl">
-                ⚠️
-              </div>
-              <h3 className="text-white font-semibold text-base">Reset your PIN?</h3>
-              <p className="text-white/40 text-xs mt-2 leading-relaxed">
-                Your PIN will be removed. Your cloud data stays safe and you'll be asked to create a new PIN.
-              </p>
+          <div className="space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-accent-amber border border-amber-200 flex items-center justify-center mx-auto">
+              <AlertTriangle size={24} />
             </div>
-            <div className="flex gap-3">
-              <button
+            <p className="text-xs text-muted leading-relaxed">
+              Your device PIN will be reset. All cloud data remains completely safe, and you will be prompted to set up a new PIN upon next sign in.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
                 onClick={() => setShowResetConfirm(false)}
-                className="flex-1 py-3.5 rounded-2xl bg-white/5 border border-white/10
-                  text-white/60 text-sm font-medium hover:bg-white/10 transition-colors"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                className="flex-1"
                 onClick={() => {
                   resetPin();
                   setPin('');
@@ -294,14 +291,12 @@ export default function PinLockScreen() {
                   setSetupStep('enter');
                   setShowResetConfirm(false);
                 }}
-                className="flex-1 py-3.5 rounded-2xl bg-purple-600 text-white text-sm
-                  font-semibold hover:bg-purple-500 transition-colors shadow-lg shadow-purple-600/25"
               >
                 Reset PIN
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
