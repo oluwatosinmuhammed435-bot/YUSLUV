@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Eye, EyeOff, ArrowRight, ShieldCheck, Zap, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Zap } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -91,63 +91,24 @@ export default function LoginScreen() {
           </div>
         </div>
 
-        {/* Center / Bottom Highlight Cards & Testimonial */}
-        <div className="relative z-10 space-y-6 max-w-lg my-auto pt-16">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-emerald-300 text-xs font-semibold">
-              <Zap size={14} className="text-accent-amber" />
-              <span>Built for High-Speed Retail Counters</span>
-            </div>
-
-            <h2 className="text-3xl xl:text-4xl font-extrabold tracking-tight text-white leading-tight">
-              Manage inventory, record sales, and collect customer debts with ease.
-            </h2>
-            <p className="text-sm text-white/80 leading-relaxed">
-              Designed specifically for Nigerian supermarkets and provision merchants. Fast counter transactions with dual bulk & piece pricing, automatic stock deduction, and WhatsApp debt reminders.
-            </p>
+        {/* Center Headline & Tagline */}
+        <div className="relative z-10 space-y-4 max-w-lg my-auto pt-16">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-emerald-300 text-xs font-semibold">
+            <Zap size={14} className="text-accent-amber" />
+            <span>Built for High-Speed Retail Counters</span>
           </div>
 
-          {/* Value Props Pills */}
-          <div className="space-y-2.5 pt-2">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">
-                <CheckCircle2 size={18} />
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold text-white">Dual Piece & Bulk Pricing</h4>
-                <p className="text-[11px] text-white/70">Sell per carton, roll, or piece with automatic inventory math.</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">
-                <MessageSquare size={18} />
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold text-white">1-Click WhatsApp Invoices</h4>
-                <p className="text-[11px] text-white/70">Send pre-formatted itemized debt reminders directly to customers.</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">
-                <ShieldCheck size={18} />
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold text-white">OPay-Style Quick PIN & Offline First</h4>
-                <p className="text-[11px] text-white/70">Lock your counter register securely when stepping away.</p>
-              </div>
-            </div>
-          </div>
+          <h2 className="text-3xl xl:text-4xl font-extrabold tracking-tight text-white leading-tight">
+            Manage inventory, record sales, and collect customer debts with ease.
+          </h2>
+          <p className="text-sm text-white/80 leading-relaxed">
+            Designed specifically for Nigerian supermarkets and provision merchants. Fast counter transactions with dual bulk & piece pricing, automatic stock deduction, and WhatsApp debt reminders.
+          </p>
         </div>
 
-        {/* Bottom Footer Note */}
-        <div className="relative z-10 pt-6 border-t border-white/15 flex items-center justify-between text-xs text-white/60">
-          <span>&copy; {new Date().getFullYear()} Yusluv POS Suite</span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            Cloud & Offline Sync Ready
-          </span>
+        {/* Bottom Footer: Only © 2026 Yusluv POS Suite */}
+        <div className="relative z-10 pt-6 border-t border-white/15 text-xs text-white/60">
+          <span>&copy; 2026 Yusluv POS Suite</span>
         </div>
       </div>
 
@@ -286,15 +247,6 @@ export default function LoginScreen() {
               {mode === 'signin' ? 'Sign In to Register' : 'Complete Registration'}
             </Button>
           </form>
-
-          {/* Trust badges */}
-          <div className="pt-4 border-t border-border flex items-center justify-between text-[11px] text-muted">
-            <span className="flex items-center gap-1.5">
-              <ShieldCheck size={14} className="text-success" />
-              Encrypted Firebase Auth
-            </span>
-            <span>Local Offline Persistence</span>
-          </div>
         </div>
 
         {/* Footer info */}
